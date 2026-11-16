@@ -1,4 +1,4 @@
-# Florece Tenango
+﻿# Florece Tenango
 
 Sitio informativo y audiovisual sobre la floricultura y la comunidad de Tenango de las Flores. Esta etapa usa HTML5, CSS3 y JavaScript del navegador; no requiere paquetes, compilación, framework ni servidor de aplicación.
 
@@ -17,7 +17,7 @@ Abre `index.html` con doble clic. En Visual Studio Code también puedes abrir la
 
 Las entrevistas aún no tienen nombres ni fotografías; las tarjetas están marcadas como pendientes. Las imágenes de la galería y las portadas de video son provisionales de Unsplash y no representan lugares específicos de Tenango. Los reproductores de video se añadirán cuando haya archivos autorizados. Los centros capacitadores, evaluadores y certificadores no se nombran hasta confirmar sus datos y especialidades; tampoco se inventan contactos o enlaces oficiales.
 
-No encontré un archivo de logotipo entre los recursos actuales. Se conserva un símbolo botánico decorativo junto al nombre tipográfico de la marca; puedes reemplazar `.brand-symbol` en `index.html` y `privacidad.html` cuando incorpores el logotipo oficial.
+El logotipo transparente `Imagenes/SF_Logo_Florece_Tenango.png` está integrado en el encabezado, el pie de página y el aviso de privacidad. La variante transparente se usa para que se adapte al fondo marfil sin un recuadro blanco.
 
 ## Inicio de sesión
 
