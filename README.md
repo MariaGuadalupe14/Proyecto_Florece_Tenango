@@ -8,9 +8,11 @@ Abre `index.html` con doble clic. En Visual Studio Code también puedes abrir la
 
 ## Organización
 
-- `index.html`: Inicio, entrevistas a floricultores, galería, videos, centros capacitadores y acceso visual.
-- `styles.css`: identidad visual, disposición de tarjetas, acceso y adaptaciones para móvil y tableta.
-- `script.js`: menú móvil, mostrar u ocultar contraseña y comportamiento local del acceso demostrativo.
+- `index.html`: página existente, con la sección de capacitación y el panel de Xóchitl integrados sin retirar las secciones previas.
+- `styles.css`: identidad visual, disposición de tarjetas, acceso y adaptaciones para móvil y tableta, más el catálogo y chat.
+- `script.js`: comportamiento existente del menú y el acceso demostrativo, además de filtros, renderizado seguro del catálogo y conversación local de Xóchitl.
+- `catalogo.js`: fuente única de cursos y recursos usada tanto por el catálogo visible como por Xóchitl.
+- `recomendador.js`: adaptación local de búsqueda greedy best-first.
 - `privacidad.html`: información sobre el funcionamiento y los datos del prototipo.
 
 ## Contenido pendiente
@@ -24,3 +26,13 @@ El logotipo transparente `Imagenes/SF_Logo_Florece_Tenango.png` está integrado 
 La tarjeta de acceso es demostrativa. No verifica cuentas ni envía ni guarda el correo o la contraseña. El botón valida los campos en el navegador, los limpia y muestra un aviso; no existe un formulario que pueda enviar esos datos. No hay registro, panel administrativo, base de datos ni backend.
 
 Los enlaces de fotografía y los créditos están en `index.html`. Para sustituir una foto, agrega el archivo autorizado al proyecto, cambia el valor de `src` por una ruta local como `images/foto.webp` y actualiza su texto alternativo y crédito.
+
+## Xóchitl y el catálogo
+
+Xóchitl hace cinco preguntas adaptativas y permite volver a la pregunta anterior. No solicita información personal y las respuestas solo viven en memoria durante la página abierta. El catálogo permite buscar por curso o institución, filtrar por categoría y mostrar opciones marcadas como gratuitas.
+
+El recomendador representa la consulta como un grafo conceptual: raíz → área → necesidad → registros candidatos. La frontera de candidatos se prioriza por `h(n) = 100 - puntuación`; toma primero el candidato con menor coste heurístico (mayor coincidencia) hasta reunir tres. La puntuación pondera área (35), necesidad (30), tipo de negocio (10), modalidad (10), presupuesto (10) y estado verificado (hasta 5). Es una adaptación greedy best-first del recorrido hacia candidatos, no un motor institucional ni una búsqueda de cursos en vivo. Las preferencias explícitas de modalidad no seleccionan una modalidad declarada incompatible; los datos desconocidos aparecen con una advertencia de confirmación. Para presupuesto gratuito se excluyen opciones marcadas como de pago y se advierte sobre costo desconocido.
+
+Para agregar una opción, agrega un objeto a `window.FLORECE_CATALOG` en `catalogo.js`, con un `id` único, `name`, `provider`, `category`, `type`, `description`, `modality`, `duration`, `cost`, `free` (`true`, `false` o `null`), `status`, `certification`, `url` oficial y `tags` de temas/negocios. No marques como verificado un dato que no confirmaste. El catálogo y las recomendaciones se actualizan desde esa misma lista.
+
+Los dos cursos de HubSpot se revisaron en sus páginas oficiales el 20 de noviembre de 2026: duración publicada de 5 h 18 min para redes sociales y 8 h 23 min para marketing de contenidos; ambos aparecen como gratuitos e incluyen certificación. La referencia inicial de duración ya no coincide. Google, CONDUSEF, ICATEP, Cisco y Google Safety aún requieren confirmar oferta, modalidad, precio/condiciones y/o reconocimiento vigentes; sus registros indican la incertidumbre aplicable.

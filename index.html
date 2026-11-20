@@ -7,6 +7,8 @@
     <meta name="description" content="Florece Tenango: una plataforma informativa y audiovisual para conocer la floricultura, a sus protagonistas y la riqueza local de Tenango de las Flores.">
     <title>Florece Tenango | Floricultura y comunidad</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="catalogo.js" defer></script>
+    <script src="recomendador.js" defer></script>
     <script src="script.js" defer></script>
   </head>
   <body>
@@ -22,6 +24,7 @@
         <a href="#galeria">Galería</a>
         <a href="#videos">Videos</a>
         <a href="#centros">Centros capacitadores</a>
+        <a href="#capacitacion">Capacitación</a>
         <a class="nav-login" href="#acceso">Iniciar sesión <span aria-hidden="true">↗</span></a>
       </nav>
     </header>
@@ -90,7 +93,18 @@
           <button class="login-submit" id="login-submit" type="button">Iniciar sesión <span aria-hidden="true">↗</span></button><p class="login-status" id="login-status" role="status" aria-live="polite">Esta demostración no valida cuentas ni transmite ninguna información.</p>
         </div>
       </div></section>
+      <section class="training-section" id="capacitacion" aria-labelledby="training-title">
+        <div class="section-wrap"><div class="section-heading"><div><p class="eyebrow"><span></span> Aprende y fortalece tu negocio</p><h2 id="training-title">Cursos y oportunidades<br>de <em>capacitación</em></h2></div><p class="section-lead">Explora cursos y recursos; revisa su estado antes de inscribirte.</p></div>
+          <div class="catalog-controls"><label>Buscar <input id="catalog-search" type="search" placeholder="Curso o institución" maxlength="100"></label><label>Categoría <select id="catalog-category"><option value="">Todas las categorías</option></select></label><label class="free-filter"><input id="catalog-free" type="checkbox"> Solo gratuitos confirmados</label></div>
+          <div id="catalog-results" class="catalog-grid" aria-live="polite"></div>
+        </div>
+      </section>
     </main>
+    <button class="xochitl-launcher" id="xochitl-open" type="button" aria-controls="xochitl-panel" aria-expanded="false">✿ <span>Habla con Xóchitl</span></button>
+    <aside class="xochitl-panel" id="xochitl-panel" aria-label="Asistente Xóchitl" hidden>
+      <div class="xochitl-header"><div><strong>Xóchitl</strong><span>Asistente inteligente de Florece Tenango</span></div><button id="xochitl-close" type="button" aria-label="Cerrar asistente">×</button></div>
+      <div class="chat-log" id="chat-log" role="log" aria-live="polite"></div><div class="chat-options" id="chat-options"></div>
+    </aside>
 
     <footer class="site-footer"><div class="footer-main"><div class="footer-about"><a class="brand" href="#inicio"><img class="brand-logo" src="Imagenes/SF_Logo_Florece_Tenango.png" alt="Florece Tenango"></a><p>Una plataforma para compartir la floricultura y las historias de Tenango de las Flores.</p></div><div class="footer-links"><h2>Secciones</h2><a href="#entrevistas">Entrevistas</a><a href="#galeria">Galería</a><a href="#videos">Videos</a><a href="#centros">Centros capacitadores</a></div><div class="footer-links"><h2>Información</h2><a href="#acceso">Iniciar sesión</a><a href="privacidad.html">Aviso de privacidad</a><span>Proyecto en desarrollo</span></div><div class="footer-credits"><h2>Créditos visuales</h2><p>Fotografías provisionales de Unsplash; créditos de autores: Annie Spratt, vadim kaipov, Brigitte Toh y Lukáš S. Las imágenes no identifican lugares de Tenango.</p></div></div><div class="footer-bottom"><span>© <span id="current-year"></span> Florece Tenango</span><a href="privacidad.html">Aviso de privacidad</a><a href="#inicio">Volver arriba ↑</a></div></footer>
   </body>
