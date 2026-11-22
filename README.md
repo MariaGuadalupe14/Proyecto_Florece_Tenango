@@ -17,7 +17,7 @@ Abre `index.html` con doble clic. En Visual Studio Code también puedes abrir la
 
 ## Contenido pendiente
 
-Las entrevistas aún no tienen nombres ni fotografías; las tarjetas están marcadas como pendientes. Las imágenes de la galería y las portadas de video son provisionales de Unsplash y no representan lugares específicos de Tenango. Los reproductores de video se añadirán cuando haya archivos autorizados. Los centros capacitadores, evaluadores y certificadores no se nombran hasta confirmar sus datos y especialidades; tampoco se inventan contactos o enlaces oficiales.
+Las entrevistas aún no tienen nombres ni fotografías; las tarjetas están marcadas como pendientes. Las imágenes de la galería son provisionales de Unsplash y no representan lugares específicos de Tenango. La sección Videos reproduce los archivos locales `Videos_Reels/Video1.mp4` y `Video2.mp4`, con las portadas entregadas en esa carpeta. Cada archivo supera los 100 MiB; GitHub bloquea archivos de ese tamaño en Git normal, por lo que para publicarlos tendrás que comprimirlos por debajo del límite o usar Git LFS. Los centros capacitadores, evaluadores y certificadores no se nombran hasta confirmar sus datos y especialidades; tampoco se inventan contactos o enlaces oficiales.
 
 El logotipo transparente `Imagenes/SF_Logo_Florece_Tenango.png` está integrado en el encabezado, el pie de página y el aviso de privacidad. La variante transparente se usa para que se adapte al fondo marfil sin un recuadro blanco.
 

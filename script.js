@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 document.addEventListener('DOMContentLoaded', () => {
   const menuButton = document.querySelector('.menu-toggle');
@@ -86,4 +86,14 @@ document.addEventListener('DOMContentLoaded', () => {
   function showResults(){options.replaceChildren();say('Estoy comparando tus respuestas con el catálogo…');const results=window.FLORECE_RECOMMENDER.recommend(answers);if(!results.length){say('No encontré coincidencias compatibles con tus preferencias. Puedes probar “Cualquiera” en modalidad o presupuesto.');}else{results.forEach(item=>{const article=document.createElement('article');article.className='chat-result';const title=document.createElement('strong');title.textContent=item.name;const details=document.createElement('p');details.textContent=`${item.provider} · ${item.status} · Coincidencia ${item.score}/100`;const reason=document.createElement('p');reason.textContent=item.reason;const link=document.createElement('a');link.href=item.url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Consultar fuente ↗';article.append(title,details,reason,link);log.append(article);});}const restart=document.createElement('button');restart.textContent='Empezar de nuevo';restart.addEventListener('click',()=>{answers.business=answers.area=answers.need=answers.modality=answers.budget=undefined;step=0;log.replaceChildren();say('Hola, soy Xóchitl. Te ayudaré a encontrar opciones relacionadas con tu negocio. No necesito datos personales.');showQuestion();});options.append(restart);}
   function openChat(){panel.hidden=false;opener.setAttribute('aria-expanded','true');if(!log.childElementCount){say('Hola, soy Xóchitl. Te ayudaré a encontrar opciones relacionadas con tu negocio. No necesito datos personales.');say('¿Iniciamos una recomendación?');const start=document.createElement('button');start.textContent='Iniciar recomendación';start.addEventListener('click',()=>{start.remove();showQuestion();});options.append(start);}}
   opener.addEventListener('click',openChat);closer.addEventListener('click',()=>{panel.hidden=true;opener.setAttribute('aria-expanded','false');opener.focus();});
+  const privacyDialog = document.querySelector('#privacy-dialog');
+  const privacyOpener = document.querySelector('[data-open-privacy]');
+  const privacyCloser = document.querySelector('[data-close-privacy]');
+  if (privacyDialog && privacyOpener && privacyCloser) {
+    privacyOpener.addEventListener('click', () => privacyDialog.showModal());
+    privacyCloser.addEventListener('click', () => privacyDialog.close());
+    privacyDialog.addEventListener('click', event => {
+      if (event.target === privacyDialog) privacyDialog.close();
+    });
+  }
 });
