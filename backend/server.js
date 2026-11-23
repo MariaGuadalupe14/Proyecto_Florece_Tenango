@@ -12,11 +12,18 @@ const cron = require('node-cron');
 const { detectarIntentosSospechosos } = require('./detector');
 const authRoutes = require('./auth');
 const { requireAuth, requireRole } = require('./middleware');
+const { createProxyAuthMiddleware } = require('./proxy-auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 const sessionSecret = process.env.SESSION_SECRET;
+const cookieSecureSetting = process.env.SESSION_COOKIE_SECURE;
+if (cookieSecureSetting !== undefined && !['true', 'false'].includes(cookieSecureSetting)) {
+    throw new Error('SESSION_COOKIE_SECURE must be true or false.');
+}
+const sessionCookieSecure = isProduction || cookieSecureSetting === 'true';
+const backendProxySecret = process.env.BACKEND_PROXY_SECRET;
 const requiredConfig = ['DB_HOST', 'DB_USER', 'DB_NAME', 'SESSION_SECRET'];
 const missingConfig = requiredConfig.filter(name => !process.env[name]);
 if (missingConfig.length) {
@@ -30,6 +37,9 @@ if (!Number.isInteger(trustProxyHops) || trustProxyHops < 0) {
     throw new Error('TRUST_PROXY_HOPS must be a non-negative integer.');
 }
 if (trustProxyHops > 0) app.set('trust proxy', trustProxyHops);
+if (backendProxySecret && Buffer.byteLength(backendProxySecret, 'utf8') < 32) {
+    throw new Error('BACKEND_PROXY_SECRET must contain at least 32 bytes when configured.');
+}
 if (isProduction && process.env.DB_SSL !== 'true') {
     throw new Error('DB_SSL=true is required in production.');
 }
@@ -59,10 +69,16 @@ app.use((req, res, next) => {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Credentials', 'true');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-CSRF-Token');
         res.setHeader('Vary', 'Origin');
     }
     if (req.method === 'OPTIONS') return res.sendStatus(allowed ? 204 : origin ? 403 : 204);
+    next();
+});
+
+app.use('/api', createProxyAuthMiddleware({ secret: backendProxySecret, isProduction }));
+app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
     next();
 });
 
@@ -90,7 +106,8 @@ app.use(session({
     saveUninitialized: false,
     cookie: {
         httpOnly: true,
-        secure: isProduction, // HTTPS required in production
+        secure: sessionCookieSecure, // Can be enabled for an HTTPS tunnel independently of NODE_ENV.
+        proxy: sessionCookieSecure ? true : undefined,
         sameSite: 'lax',
         path: '/',
         maxAge: 1000 * 60 * 60

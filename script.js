@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   const localHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-  const authApi = localHost ? window.location.protocol + '//' + window.location.hostname + ':3000/api/auth' : null;
+  const authApi = localHost ? window.location.protocol + '//' + window.location.hostname + ':3000/api/auth' : '/api/auth';
   const loginForm = document.querySelector('#login-form');
   const registerForm = document.querySelector('#register-form');
   const loginStatus = document.querySelector('#login-status');
@@ -57,10 +57,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   async function sendAuthRequest(path, payload) {
-    if (!authApi) throw new Error('local-backend-only');
+    const csrfResponse = await fetch(authApi + '/csrf', {
+      method: 'GET', credentials: 'include', cache: 'no-store'
+    });
+    const csrfBody = await csrfResponse.json().catch(() => ({}));
+    if (!csrfResponse.ok || typeof csrfBody.csrfToken !== 'string') {
+      throw new Error(csrfBody.mensaje || 'No se pudo preparar la solicitud segura.');
+    }
     const response = await fetch(authApi + '/' + path, {
-      method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', credentials: 'include', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfBody.csrfToken },
       body: JSON.stringify(payload)
     });
     const body = await response.json().catch(() => ({}));

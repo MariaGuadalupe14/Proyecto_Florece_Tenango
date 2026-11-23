@@ -9,6 +9,7 @@ const users = new Map();
 const accessAttempts = [];
 const activity = [];
 const sessionStates = [];
+const testSessions = new Map();
 let rejectNextUserInsert = false;
 const fakeDb = {
     async execute(sql, params = []) {
@@ -63,14 +64,20 @@ const { detectarIntentosSospechosos } = require('../detector');
 const app = express();
 app.use(express.json());
 app.use((req, res, next) => {
-    const state = {
-        usuario: req.get('x-test-auth') === 'enabled'
-            ? { id: 1, nombre: 'Test User', correo: 'test@example.invalid', rol: 'usuario' }
-            : undefined,
-        regenerate(callback) { this.regenerated = true; this.usuario = undefined; callback(); },
-        save(callback) { this.saved = true; callback(); },
-        destroy(callback) { this.destroyed = true; this.usuario = undefined; callback(); }
-    };
+    const sessionId = req.get('x-test-session') || 'default-test-session';
+    let state = testSessions.get(sessionId);
+    if (!state) {
+        state = {
+            usuario: undefined,
+            regenerate(callback) { this.regenerated = true; this.usuario = undefined; delete this.csrfToken; callback(); },
+            save(callback) { this.saved = true; callback(); },
+            destroy(callback) { this.destroyed = true; this.usuario = undefined; delete this.csrfToken; callback(); }
+        };
+        testSessions.set(sessionId, state);
+    }
+    if (req.get('x-test-auth') === 'enabled') {
+        state.usuario = { id: 1, nombre: 'Test User', correo: 'test@example.invalid', rol: 'usuario' };
+    }
     sessionStates.push(state);
     req.session = state;
     next();
@@ -90,11 +97,29 @@ test.after(async () => {
     await new Promise(resolve => server.close(resolve));
 });
 
-async function post(path, body, extraHeaders = {}) {
-    return fetch(`${baseUrl}${path}`, {
+async function csrfFor(path, sessionId, extraHeaders = {}) {
+    const endpoint = path.startsWith('/api/limits/') ? '/api/limits/csrf' : '/api/auth/csrf';
+    const response = await fetch(baseUrl + endpoint, {
+        headers: { origin: 'http://localhost:5500', 'x-test-session': sessionId, ...extraHeaders }
+    });
+    return response.json();
+}
+
+async function postRaw(path, body, extraHeaders = {}) {
+    return fetch(baseUrl + path, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', ...extraHeaders },
+        headers: { 'content-type': 'application/json', origin: 'http://localhost:5500', ...extraHeaders },
         body: JSON.stringify(body)
+    });
+}
+
+async function post(path, body, extraHeaders = {}) {
+    const sessionId = extraHeaders['x-test-session'] || 'default-test-session';
+    const csrf = await csrfFor(path, sessionId, extraHeaders);
+    return postRaw(path, body, {
+        'x-test-session': sessionId,
+        'x-csrf-token': csrf.csrfToken,
+        ...extraHeaders
     });
 }
 
@@ -190,4 +215,18 @@ test('detector emits at most one alert per account and IP within its cooldown', 
         console.warn = originalWarn;
     }
     assert.equal(count, 1);
+});
+
+
+test('write endpoints reject missing CSRF tokens and untrusted origins', async () => {
+    const noToken = await postRaw('/api/auth/registro', {
+        nombre: 'Test User', correo: 'csrf@example.invalid', password: 'Synthetic-csrf-test-2026!'
+    }, { 'x-test-session': 'csrf-test-session' });
+    assert.equal(noToken.status, 403);
+
+    const csrf = await csrfFor('/api/auth/registro', 'csrf-test-session');
+    const wrongOrigin = await postRaw('/api/auth/registro', {
+        nombre: 'Test User', correo: 'csrf@example.invalid', password: 'Synthetic-csrf-test-2026!'
+    }, { 'x-test-session': 'csrf-test-session', 'x-csrf-token': csrf.csrfToken, origin: 'https://attacker.invalid' });
+    assert.equal(wrongOrigin.status, 403);
 });

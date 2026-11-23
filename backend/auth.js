@@ -1,5 +1,6 @@
 
 const express = require('express');
+const crypto = require('crypto');
 const argon2 = require('argon2');
 const db = require('./db');
 const { rateLimit } = require('express-rate-limit');
@@ -53,8 +54,55 @@ const registrationLimit = rateLimit({
     message: { mensaje: 'Registration limit reached. Try again later.' }
 });
 
+const csrfTokenLimit = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 60,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { mensaje: 'Demasiadas solicitudes. Intenta nuevamente.' }
+});
+
+function isTrustedBrowserOrigin(origin = '') {
+    if (origin === 'https://proyecto-florece-tenango.pages.dev') return true;
+    if (process.env.NODE_ENV === 'production') return false;
+    try {
+        const parsed = new URL(origin);
+        return parsed.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(parsed.hostname);
+    } catch {
+        return false;
+    }
+}
+
+router.use((req, res, next) => {
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+    if (!isTrustedBrowserOrigin(req.get('Origin'))) {
+        return res.status(403).json({ mensaje: 'Origen no autorizado.' });
+    }
+    next();
+});
+
+router.get('/csrf', csrfTokenLimit, (req, res) => {
+    if (!req.session.csrfToken) req.session.csrfToken = crypto.randomBytes(32).toString('base64url');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ csrfToken: req.session.csrfToken });
+});
+
+function requireCsrf(req, res, next) {
+    const provided = req.get('X-CSRF-Token');
+    const expected = req.session && req.session.csrfToken;
+    if (typeof provided !== 'string' || typeof expected !== 'string') {
+        return res.status(403).json({ mensaje: 'Token CSRF no v?lido.' });
+    }
+    const suppliedBytes = Buffer.from(provided, 'utf8');
+    const expectedBytes = Buffer.from(expected, 'utf8');
+    if (suppliedBytes.length !== expectedBytes.length || !crypto.timingSafeEqual(suppliedBytes, expectedBytes)) {
+        return res.status(403).json({ mensaje: 'Token CSRF no v?lido.' });
+    }
+    next();
+}
+
 // REGISTRO
-router.post('/registro', registrationLimit, async (req, res) => {
+router.post('/registro', registrationLimit, requireCsrf, async (req, res) => {
     try {
         const { nombre, correo, password } = req.body;
 
@@ -142,7 +190,7 @@ router.post('/registro', registrationLimit, async (req, res) => {
 });
 
 // INICIO DE SESIÓN
-router.post('/login', loginLimit, async (req, res) => {
+router.post('/login', loginLimit, requireCsrf, async (req, res) => {
     try {
         const { correo, password } = req.body;
 
@@ -214,6 +262,8 @@ router.post('/login', loginLimit, async (req, res) => {
         };
 
         // Guardar la sesión
+        req.session.csrfToken = crypto.randomBytes(32).toString('base64url');
+
         await new Promise((resolve, reject) => {
             req.session.save(error => {
                 if (error) reject(error);
@@ -233,7 +283,8 @@ router.post('/login', loginLimit, async (req, res) => {
 
         return res.json({
             mensaje: 'Inicio de sesión correcto.',
-            usuario: req.session.usuario
+            usuario: req.session.usuario,
+            csrfToken: req.session.csrfToken
         });
 
     } catch (error) {
@@ -259,7 +310,7 @@ router.get('/me', (req, res) => {
 });
 
 // CERRAR SESIÓN
-router.post('/logout', async (req, res) => {
+router.post('/logout', requireCsrf, async (req, res) => {
     try {
         const usuario = req.session.usuario;
         const ip = req.ip;
@@ -281,7 +332,7 @@ router.post('/logout', async (req, res) => {
             });
         });
 
-        res.clearCookie('florece.sid', { path: '/', httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+        res.clearCookie('florece.sid', { path: '/', httpOnly: true, secure: process.env.NODE_ENV === 'production' || process.env.SESSION_COOKIE_SECURE === 'true', sameSite: 'lax' });
 
         return res.json({
             mensaje: 'Sesión cerrada correctamente.'
