@@ -25,27 +25,103 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  const password = document.querySelector('#password');
-  const passwordToggle = document.querySelector('#toggle-password');
-  passwordToggle.addEventListener('click', () => {
-    const showing = password.type === 'password';
-    password.type = showing ? 'text' : 'password';
-    passwordToggle.textContent = showing ? 'Ocultar' : 'Mostrar';
-    passwordToggle.setAttribute('aria-label', showing ? 'Ocultar contraseña' : 'Mostrar contraseña');
-    passwordToggle.setAttribute('aria-pressed', String(showing));
+  const localHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  const authApi = localHost ? window.location.protocol + '//' + window.location.hostname + ':3000/api/auth' : null;
+  const loginForm = document.querySelector('#login-form');
+  const registerForm = document.querySelector('#register-form');
+  const loginStatus = document.querySelector('#login-status');
+  const registerStatus = document.querySelector('#register-status');
+  const formTitle = document.querySelector('#auth-form-title');
+  const formSubtitle = document.querySelector('#auth-form-subtitle');
+  const setFormMode = (registering) => {
+    loginForm.hidden = registering;
+    registerForm.hidden = !registering;
+    formTitle.textContent = registering ? 'Crear cuenta' : 'Iniciar sesi\u00f3n';
+    formSubtitle.textContent = registering ? '\u00danete a Florece Tenango' : 'Acceso a tu cuenta';
+    loginStatus.textContent = '';
+    registerStatus.textContent = '';
+    (registering ? document.querySelector('#register-name') : document.querySelector('#email')).focus();
+  };
+  document.querySelector('#show-register').addEventListener('click', () => setFormMode(true));
+  document.querySelector('#show-login').addEventListener('click', () => setFormMode(false));
+
+  document.querySelectorAll('[data-password-toggle]').forEach(toggle => {
+    toggle.addEventListener('click', () => {
+      const input = document.getElementById(toggle.dataset.passwordToggle);
+      const showing = input.type === 'password';
+      input.type = showing ? 'text' : 'password';
+      toggle.textContent = showing ? 'Ocultar' : 'Mostrar';
+      toggle.setAttribute('aria-label', showing ? 'Ocultar contrase\u00f1a' : 'Mostrar contrase\u00f1a');
+      toggle.setAttribute('aria-pressed', String(showing));
+    });
   });
 
-  const email = document.querySelector('#email');
-  const loginStatus = document.querySelector('#login-status');
-  document.querySelector('#login-submit').addEventListener('click', () => {
+  async function sendAuthRequest(path, payload) {
+    if (!authApi) throw new Error('local-backend-only');
+    const response = await fetch(authApi + '/' + path, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const body = await response.json().catch(() => ({}));
+    return { response, body };
+  }
+
+  loginForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    loginStatus.textContent = '';
+    const email = document.querySelector('#email');
+    const password = document.querySelector('#password');
     if (!email.reportValidity() || !password.reportValidity()) return;
-    email.value = '';
-    password.value = '';
-    password.type = 'password';
-    passwordToggle.textContent = 'Mostrar';
-    passwordToggle.setAttribute('aria-label', 'Mostrar contraseña');
-    passwordToggle.setAttribute('aria-pressed', 'false');
-    loginStatus.textContent = 'Interfaz de demostración: no se verificó, envió ni guardó ningún dato.';
+    const button = loginForm.querySelector('[type="submit"]');
+    button.disabled = true;
+    try {
+      const result = await sendAuthRequest('login', { correo: email.value.trim(), password: password.value });
+      if (!result.response.ok) throw new Error(result.body.mensaje || 'No se pudo iniciar sesi\u00f3n. Revisa tu correo y contrase\u00f1a.');
+      password.value = '';
+      loginStatus.textContent = 'Sesi\u00f3n iniciada' + (result.body.usuario && result.body.usuario.nombre ? ': ' + result.body.usuario.nombre : '') + '.';
+    } catch (error) {
+      loginStatus.textContent = error.message === 'local-backend-only'
+        ? 'El backend solo est\u00e1 disponible localmente. Abre esta p\u00e1gina desde localhost para iniciar sesi\u00f3n.'
+        : error instanceof TypeError
+          ? 'No se pudo conectar con el backend local. Comprueba que est\u00e9 ejecut\u00e1ndose en localhost:3000.'
+          : error.message;
+    } finally { button.disabled = false; }
+  });
+
+  registerForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    registerStatus.textContent = '';
+    const name = document.querySelector('#register-name');
+    const email = document.querySelector('#register-email');
+    const password = document.querySelector('#register-password');
+    const confirmation = document.querySelector('#register-confirm-password');
+    if (!registerForm.reportValidity()) return;
+    if (password.value.length < 12 || password.value.length > 128) {
+      password.setCustomValidity('La contrase\u00f1a debe tener entre 12 y 128 caracteres.');
+      password.reportValidity(); password.setCustomValidity(''); return;
+    }
+    if (password.value !== confirmation.value) {
+      confirmation.setCustomValidity('Las contrase\u00f1as no coinciden.');
+      confirmation.reportValidity(); confirmation.setCustomValidity(''); return;
+    }
+    const button = registerForm.querySelector('[type="submit"]');
+    button.disabled = true;
+    try {
+      const result = await sendAuthRequest('registro', { nombre: name.value.trim(), correo: email.value.trim(), password: password.value });
+      if (!result.response.ok) throw new Error(result.body.mensaje || 'No se pudo crear la cuenta.');
+      const registeredEmail = email.value.trim();
+      registerForm.reset();
+      document.querySelector('#email').value = registeredEmail;
+      setFormMode(false);
+      loginStatus.textContent = result.body.mensaje || 'Cuenta creada. Ya puedes iniciar sesi\u00f3n.';
+    } catch (error) {
+      registerStatus.textContent = error.message === 'local-backend-only'
+        ? 'El registro solo est\u00e1 disponible localmente. Abre esta p\u00e1gina desde localhost para crear una cuenta.'
+        : error instanceof TypeError
+          ? 'No se pudo conectar con el backend local. Comprueba que est\u00e9 ejecut\u00e1ndose en localhost:3000.'
+          : error.message;
+    } finally { button.disabled = false; }
   });
 
   document.querySelectorAll('img').forEach(image => image.addEventListener('error', () => {

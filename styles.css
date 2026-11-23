@@ -32,3 +32,16 @@
 
 .video-embed{border:0;}
 
+
+
+/* Formularios de acceso y registro */
+.auth-form>label{display:block;margin:16px 0 7px;color:#4e554d;font-size:9px;font-weight:700}
+.auth-form>input,.auth-form .password-field input{height:43px;width:100%;padding:0 11px;border:1px solid #d9d7cc;border-radius:0;background:#fff;color:var(--ink);font-size:10px}
+.auth-form .password-field input{padding-right:76px}
+.auth-form .password-toggle{position:absolute;right:3px;top:3px;height:37px;padding:0 9px;border:0;background:transparent;color:var(--forest);font-size:9px;font-weight:700;cursor:pointer}
+.auth-form .login-status{min-height:14px;font-size:10px;overflow-wrap:anywhere}
+.auth-switch{margin:16px 0 0;text-align:center;color:var(--muted);font-size:10px;line-height:1.6}
+.auth-switch-link{padding:0;border:0;background:transparent;color:var(--forest);font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.auth-switch-link:hover{color:var(--mauve)}
+.password-hint{margin:7px 0 0;color:var(--muted);font-size:9px}
+.auth-form [type=submit]:disabled{opacity:.65;cursor:wait}

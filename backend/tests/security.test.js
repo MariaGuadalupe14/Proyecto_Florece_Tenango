@@ -9,6 +9,7 @@ const users = new Map();
 const accessAttempts = [];
 const activity = [];
 const sessionStates = [];
+let rejectNextUserInsert = false;
 const fakeDb = {
     async execute(sql, params = []) {
         if (sql.includes('SELECT id FROM usuarios WHERE correo = ?')) {
@@ -16,6 +17,12 @@ const fakeDb = {
             return [user ? [{ id: user.id }] : [], []];
         }
         if (sql.includes('INSERT INTO usuarios')) {
+            if (rejectNextUserInsert) {
+                rejectNextUserInsert = false;
+                const error = new Error('Synthetic duplicate-key race');
+                error.code = 'ER_DUP_ENTRY';
+                throw error;
+            }
             const [nombre, correo, password_hash] = params;
             users.set(correo, { id: users.size + 1, nombre, correo, password_hash, rol: 'usuario' });
             return [{ affectedRows: 1 }, []];
@@ -106,6 +113,16 @@ test('registration validates fields and stores an Argon2id hash', async () => {
     assert.match(saved.password_hash, /^\$argon2id\$/);
     assert.equal(await argon2.verify(saved.password_hash, password), true);
     assert.equal(saved.password_hash.includes(password), false);
+});
+
+test('registration returns conflict when a concurrent insert hits the unique email index', async () => {
+    rejectNextUserInsert = true;
+    const response = await post('/api/auth/registro', {
+        nombre: 'Race Test', correo: 'race@example.invalid', password: 'Synthetic-race-password-2026!'
+    });
+    assert.equal(response.status, 409);
+    assert.deepEqual(await response.json(), { mensaje: 'No se pudo crear la cuenta con esos datos.' });
+    assert.equal(users.has('race@example.invalid'), false);
 });
 
 test('login accepts the correct password and omits the stored hash from its response', async () => {

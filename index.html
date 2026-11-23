@@ -134,11 +134,26 @@
         <p class="section-footnote">No se publican nombres, datos de contacto ni certificaciones sin confirmación de fuentes oficiales.</p>
       </div></section>
 
-      <section class="login-section" id="acceso" aria-labelledby="login-title"><div class="login-inner"><div class="login-intro"><p class="eyebrow eyebrow-light"><span></span> Acceso al sistema</p><h2 id="login-title">Tu espacio<br>en <em>Florece.</em></h2><p>La interfaz de acceso está preparada como muestra visual. La autenticación aún no está conectada.</p><span class="demo-note">Versión demostrativa · No se envían ni guardan datos</span></div>
-        <div class="login-card" id="login-card"><div class="login-card-heading"><span class="login-flower" aria-hidden="true">✳</span><div><h3>Iniciar sesión</h3><p>Acceso de demostración</p></div></div>
-          <label for="email">Correo electrónico</label><input id="email" name="email" type="email" autocomplete="off" placeholder="nombre@ejemplo.com" required maxlength="120">
-          <label for="password">Contraseña</label><div class="password-field"><input id="password" name="password" type="password" autocomplete="off" placeholder="Escribe tu contraseña" required maxlength="128"><button type="button" id="toggle-password" aria-label="Mostrar contraseña" aria-pressed="false">Mostrar</button></div>
-          <button class="login-submit" id="login-submit" type="button">Iniciar sesión <span aria-hidden="true">↗</span></button><p class="login-status" id="login-status" role="status" aria-live="polite">Esta demostración no valida cuentas ni transmite ninguna información.</p>
+      <section class="login-section" id="acceso" aria-labelledby="login-title"><div class="login-inner"><div class="login-intro"><p class="eyebrow eyebrow-light"><span></span> Acceso al sistema</p><h2 id="login-title">Tu espacio<br>en <em>Florece.</em></h2><p>Accede a tu cuenta o crea una nueva para Florece Tenango.</p><span class="demo-note">El acceso y el registro funcionan al ejecutar la p&aacute;gina y el backend en tu computadora.</span></div>
+        <div class="login-card" id="login-card">
+          <div class="login-card-heading"><span class="login-flower" aria-hidden="true">&#10038;</span><div><h3 id="auth-form-title">Iniciar sesi&oacute;n</h3><p id="auth-form-subtitle">Acceso a tu cuenta</p></div></div>
+          <form class="auth-form" id="login-form" novalidate>
+            <label for="email">Correo electr&oacute;nico</label><input id="email" name="correo" type="email" autocomplete="email" placeholder="nombre@ejemplo.com" required maxlength="150">
+            <label for="password">Contrase&ntilde;a</label><div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" placeholder="Escribe tu contrase&ntilde;a" required maxlength="128"><button type="button" class="password-toggle" data-password-toggle="password" aria-label="Mostrar contrase&ntilde;a" aria-pressed="false">Mostrar</button></div>
+            <button class="login-submit" type="submit">Iniciar sesi&oacute;n <span aria-hidden="true">&#8599;</span></button>
+            <p class="login-status" id="login-status" role="status" aria-live="polite"></p>
+            <p class="auth-switch">&iquest;No tienes una cuenta? <button type="button" class="auth-switch-link" id="show-register">Reg&iacute;strate aqu&iacute;</button></p>
+          </form>
+          <form class="auth-form" id="register-form" hidden novalidate>
+            <label for="register-name">Nombre completo</label><input id="register-name" name="nombre" type="text" autocomplete="name" placeholder="Tu nombre completo" required minlength="2" maxlength="100">
+            <label for="register-email">Correo electr&oacute;nico</label><input id="register-email" name="correo" type="email" autocomplete="email" placeholder="nombre@ejemplo.com" required maxlength="150">
+            <label for="register-password">Contrase&ntilde;a</label><div class="password-field"><input id="register-password" name="password" type="password" autocomplete="new-password" placeholder="Al menos 12 caracteres" required minlength="12" maxlength="128"><button type="button" class="password-toggle" data-password-toggle="register-password" aria-label="Mostrar contrase&ntilde;a" aria-pressed="false">Mostrar</button></div>
+            <label for="register-confirm-password">Confirmar contrase&ntilde;a</label><div class="password-field"><input id="register-confirm-password" name="confirm-password" type="password" autocomplete="new-password" placeholder="Escribe de nuevo tu contrase&ntilde;a" required minlength="12" maxlength="128"><button type="button" class="password-toggle" data-password-toggle="register-confirm-password" aria-label="Mostrar contrase&ntilde;a" aria-pressed="false">Mostrar</button></div>
+            <p class="password-hint">Usa entre 12 y 128 caracteres.</p>
+            <button class="login-submit" type="submit">Crear cuenta <span aria-hidden="true">&#8599;</span></button>
+            <p class="login-status" id="register-status" role="status" aria-live="polite"></p>
+            <p class="auth-switch">&iquest;Ya tienes una cuenta? <button type="button" class="auth-switch-link" id="show-login">Regresa a iniciar sesi&oacute;n</button></p>
+          </form>
         </div>
       </div></section>
       <section class="training-section" id="capacitacion" aria-labelledby="training-title">
