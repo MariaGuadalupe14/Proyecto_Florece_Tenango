@@ -128,6 +128,11 @@ router.post('/registro', registrationLimit, async (req, res) => {
         });
 
     } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({
+                mensaje: 'No se pudo crear la cuenta con esos datos.'
+            });
+        }
         console.error('Error en registro:', (error.code || 'UNKNOWN_ERROR'));
 
         return res.status(500).json({

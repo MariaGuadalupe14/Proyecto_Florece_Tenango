@@ -42,6 +42,30 @@ app.use(helmet({
 }));
 
 // Limitar el tamaño de los datos recibidos
+// CORS local para el frontend servido desde localhost durante desarrollo.
+function isLocalDevelopmentOrigin(origin) {
+    try {
+        const parsed = new URL(origin);
+        return parsed.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(parsed.hostname);
+    } catch {
+        return false;
+    }
+}
+
+app.use((req, res, next) => {
+    const origin = req.get('Origin');
+    const allowed = !isProduction && origin && isLocalDevelopmentOrigin(origin);
+    if (allowed) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Vary', 'Origin');
+    }
+    if (req.method === 'OPTIONS') return res.sendStatus(allowed ? 204 : origin ? 403 : 204);
+    next();
+});
+
 app.use(express.json({ limit: '10kb' }));
 
 // Almacenar las sesiones en MySQL
