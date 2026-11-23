@@ -1,3 +1,29 @@
 .DS_Store
 Thumbs.db
 *.log
+# Dependencias
+backend/node_modules/
+
+# Credenciales privadas
+backend/.env
+
+# Respaldos de base de datos
+*.sql
+*.dump
+
+backend/cookies.txt
+cookies.txt
+admin-cookies.txt
+
+# Protect dependencies and local environment files
+.env
+.env.*
+!.env.example
+node_modules/
+!backend/migrations/
+!backend/migrations/**/*.sql
+
+# Claves y certificados privados
+*.key
+*.p12
+*.pfx
