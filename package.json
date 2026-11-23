@@ -1,0 +1,15 @@
+{
+  "dependencies": {
+    "argon2": "^0.45.2",
+    "express-mysql-session": "^3.0.3",
+    "express-rate-limit": "^8.7.5",
+    "express-session": "^1.19.0",
+    "mysql2": "3.24.6"
+  },
+  "overrides": {
+    "mysql2": "3.24.6"
+  },
+  "scripts": {
+    "test": "npm --prefix backend test"
+  }
+}
