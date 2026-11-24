@@ -5,8 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f3e9">
     <title>Panel administrativo | Florece Tenango</title>
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="favicon-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="favicon-512x512.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="stylesheet" href="styles.css">
     <script src="panel.js" defer></script>
+    <script src="admin-content.js" defer></script>
   </head>
   <body class="panel-page">
     <main class="panel-shell" data-required-role="administrador" hidden>
@@ -19,18 +26,28 @@
         <h1 id="admin-title">Panel <em>administrativo.</em></h1>
         <p>Bienvenida, <strong data-user-name>Administradora</strong>. El acceso se valida con tu sesión y el rol del backend.</p>
       </section>
-      <section class="panel-stage" aria-labelledby="admin-stage-title">
-        <div class="section-heading"><div><p class="eyebrow"><span></span> Etapa 1</p><h2 id="admin-stage-title">Gestión del sistema</h2></div><p class="section-lead">Los módulos administrativos se habilitarán en etapas posteriores.</p></div>
-        <div class="panel-cards">
-          <article class="panel-card"><span>01</span><h3>Usuarios</h3><p>Gestión aún no implementada.</p></article>
-          <article class="panel-card"><span>02</span><h3>Negocios</h3><p>Registro y aprobación aún no implementados.</p></article>
-          <article class="panel-card"><span>03</span><h3>Información local</h3><p>Administración turística y florícola pendiente.</p></article>
-          <article class="panel-card"><span>04</span><h3>Reportes y actividad</h3><p>Revisión y configuración pendientes.</p></article>
+      <section class="panel-stage content-manager" aria-labelledby="admin-stage-title">
+        <div class="section-heading"><div><p class="eyebrow"><span></span> Contenido</p><h2 id="admin-stage-title">Gestiona <em>Florece Tenango</em></h2></div><p class="section-lead">Administra comercios, videos e imágenes. Los cambios requieren tu sesión de administradora.</p></div>
+        <div class="content-tabs" role="tablist" aria-label="Módulos de contenido">
+          <button type="button" class="content-tab is-active" role="tab" aria-selected="true" data-content-tab="comercios">Comercios</button>
+          <button type="button" class="content-tab" role="tab" aria-selected="false" data-content-tab="videos">Videos</button>
+          <button type="button" class="content-tab" role="tab" aria-selected="false" data-content-tab="galeria">Galería</button>
         </div>
+        <div class="content-toolbar"><label>Buscar <input id="content-search" type="search" placeholder="Nombre o título" autocomplete="off"></label><button class="button content-add" id="content-add" type="button">Agregar registro</button></div>
+        <p class="content-message" id="content-message" role="status" aria-live="polite"></p>
+        <div class="content-table-wrap"><table class="content-table"><thead id="content-head"></thead><tbody id="content-rows"></tbody></table></div>
       </section>
       <p class="panel-status" id="panel-status" role="status" aria-live="polite"></p>
       <footer class="panel-footer"><a href="index.html?public=1#inicio">Volver a Florece Tenango</a><span>Florece Tenango · Panel administrativo</span></footer>
     </main>
+    <dialog class="content-dialog" id="content-dialog" aria-labelledby="content-dialog-title">
+      <form id="content-form" class="content-form" novalidate>
+        <header class="content-dialog-header"><div><p class="eyebrow"><span></span> Contenido</p><h2 id="content-dialog-title">Agregar registro</h2></div><button class="privacy-close" type="button" id="content-dialog-close" aria-label="Cerrar formulario">×</button></header>
+        <div class="content-form-fields" id="content-form-fields"></div>
+        <p class="content-form-status" id="content-form-status" role="status" aria-live="polite"></p>
+        <div class="content-form-actions"><button class="button content-cancel" type="button" id="content-form-cancel">Cancelar</button><button class="button content-add" type="submit" id="content-form-submit">Guardar</button></div>
+      </form>
+    </dialog>
     <noscript><p>Activa JavaScript para verificar tu sesión.</p></noscript>
   </body>
 </html>

@@ -71,3 +71,36 @@
 .nav-links .nav-session-control:disabled{opacity:.65;cursor:wait}
 .panel-home-link{color:var(--forest);font-weight:700;white-space:nowrap}
 @media(max-width:760px){.nav-links .nav-session-control{font-size:11px}.nav-links .nav-login.nav-session-control{padding:13px 14px}.panel-account{flex-wrap:wrap;justify-content:flex-end}}
+
+/* Gestión de contenido del panel administrativo */
+.content-manager{padding-top:28px}
+.content-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 20px;border-bottom:1px solid var(--line)}
+.content-tab{padding:12px 17px;border:0;border-bottom:2px solid transparent;background:transparent;color:#656b61;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.content-tab:hover,.content-tab.is-active{border-bottom-color:var(--forest);color:var(--forest)}
+.content-toolbar{display:flex;align-items:end;justify-content:space-between;gap:14px;margin-bottom:10px}
+.content-toolbar label,.content-field{display:grid;gap:7px;color:var(--forest);font-size:10px;font-weight:700}
+.content-toolbar input{width:min(390px,70vw);height:42px;padding:0 12px;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-weight:400}
+.content-add,.content-cancel{min-height:42px;border:0;background:var(--forest);color:#fff;cursor:pointer}
+.content-add:hover{background:#254734}.content-cancel{border:1px solid var(--line);background:transparent;color:var(--forest)}
+.content-message,.content-form-status{min-height:20px;margin:9px 0;color:#697065;font-size:11px}
+.content-message.is-error,.content-form-status.is-error{color:#9a4147}
+.content-table-wrap{overflow:auto;border:1px solid var(--line);background:#fff}
+.content-table{width:100%;min-width:680px;border-collapse:collapse;text-align:left}
+.content-table th,.content-table td{padding:12px 13px;border-bottom:1px solid #ece9df;color:#545b51;font-size:10px;vertical-align:middle}
+.content-table th{background:#f0ede4;color:var(--forest);font-size:9px;text-transform:uppercase;letter-spacing:.5px}
+.content-table tr:last-child td{border-bottom:0}.content-empty{text-align:center!important;padding:35px!important;color:#777b72!important}
+.content-state{text-transform:capitalize;font-weight:700}.content-state.state-publicado{color:var(--forest)}.content-state.state-archivado{color:#927078}
+.content-actions{display:flex;flex-wrap:wrap;gap:6px;min-width:190px}
+.content-action{padding:7px 9px;border:1px solid var(--line);background:#fff;color:var(--forest);font:inherit;font-size:9px;font-weight:700;cursor:pointer}
+.content-action:hover{background:#eceee5}.content-action.is-primary{border-color:var(--forest);background:var(--forest);color:#fff}.content-action.is-danger{color:#8a4147}
+.content-dialog{width:min(680px,calc(100% - 24px));max-height:90vh;padding:0;border:1px solid var(--line);background:var(--ivory);color:var(--ink);box-shadow:0 20px 70px #17231b55}
+.content-dialog::backdrop{background:#17231b99;backdrop-filter:blur(3px)}
+.content-form{padding:0 24px 24px}.content-dialog-header{position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;gap:20px;padding:20px 0 15px;background:var(--ivory);border-bottom:1px solid var(--line)}
+.content-dialog-header .eyebrow{margin:0 0 6px}.content-dialog-header h2{margin:0;color:var(--forest);font:500 32px/1.1 var(--serif)}
+.content-form-fields{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding-top:17px}.content-field:has(textarea){grid-column:1/-1}
+.content-field input,.content-field textarea,.content-field select{width:100%;min-height:42px;padding:10px;border:1px solid var(--line);background:#fff;color:var(--ink);font:400 12px/1.5 Arial,Helvetica,sans-serif}
+.content-field textarea{resize:vertical}.content-form-actions{display:flex;justify-content:flex-end;gap:10px}.content-form-actions button{min-height:42px;padding:0 16px}.content-form-actions button:disabled{opacity:.6;cursor:wait}
+.commerce-image{display:block;width:100%;height:150px;margin:0 0 17px;object-fit:cover}
+.commerce-link{display:inline-block;margin-top:14px;color:var(--forest);font-size:10px;font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.public-content-empty{grid-column:1/-1;padding:28px;background:#fff;color:#73776e;font-size:12px;line-height:1.6}
+@media(max-width:760px){.content-toolbar{align-items:stretch;flex-direction:column}.content-toolbar input{width:100%}.content-toolbar>.content-add{align-self:flex-start}.content-form-fields{grid-template-columns:1fr}.content-field:has(textarea){grid-column:auto}.content-form{padding:0 18px 20px}.content-dialog-header h2{font-size:27px}}

@@ -1,0 +1,20 @@
+-- !!! ROLLBACK DESTRUCTIVO — NO ES MIGRACIÓN DE INSTALACIÓN !!!
+-- NO ejecutar como parte de migration-001-content-up.sql.
+-- Eliminaría videos, fotos y columnas añadidas a negocios, incluso registros
+-- creados o editados desde el panel administrativo.
+--
+-- Las sentencias permanecen comentadas para evitar ejecución accidental.
+-- Solo una persona responsable de la base debe descomentarlas después de:
+-- 1) confirmar que desea perder todo el contenido de estos módulos;
+-- 2) exportar los registros que deban conservarse;
+-- 3) comprobar el respaldo y la base seleccionada.
+
+-- DROP TABLE IF EXISTS galeria_imagenes;
+-- DROP TABLE IF EXISTS videos;
+-- ALTER TABLE negocios
+--     DROP INDEX idx_negocios_estado_categoria,
+--     DROP COLUMN fecha_actualizacion,
+--     DROP COLUMN estado,
+--     DROP COLUMN imagen_url,
+--     DROP COLUMN sitio_web,
+--     DROP COLUMN ubicacion;

@@ -37,6 +37,7 @@
       const name = document.querySelector('[data-user-name]');
       if (name) name.textContent = user.nombre || 'Usuario';
       root.hidden = false;
+      document.dispatchEvent(new CustomEvent('panel:authorized', { detail: { role: user.rol } }));
     } catch {
       if (status) status.textContent = 'No se pudo comprobar la sesión. Intenta nuevamente.';
       root.hidden = true;

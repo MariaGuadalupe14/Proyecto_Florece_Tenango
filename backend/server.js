@@ -11,6 +11,7 @@ const db = require('./db');
 const cron = require('node-cron');
 const { detectarIntentosSospechosos } = require('./detector');
 const authRoutes = require('./auth');
+const { createContentRouter } = require('./content-routes');
 const { requireAuth, requireRole } = require('./middleware');
 const { createProxyAuthMiddleware } = require('./proxy-auth');
 
@@ -68,7 +69,7 @@ app.use((req, res, next) => {
     if (allowed) {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-CSRF-Token');
         res.setHeader('Vary', 'Origin');
     }
@@ -135,6 +136,7 @@ app.get('/api/estado', async (req, res) => {
 
 // Rutas de autenticación
 app.use('/api/auth', authRoutes);
+app.use('/api', createContentRouter({ db, requireRole }));
 // Ruta de prueba: cualquier usuario con sesión activa
 app.get('/api/privado', requireAuth, (req, res) => {
     res.json({

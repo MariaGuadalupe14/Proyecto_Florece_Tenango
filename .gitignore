@@ -10,6 +10,7 @@ backend/.env
 # Respaldos de base de datos
 *.sql
 *.dump
+!backend/migration-001-content-*.sql
 
 backend/cookies.txt
 cookies.txt
