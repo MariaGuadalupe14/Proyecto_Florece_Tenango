@@ -1,13 +1,15 @@
+import { SECURITY_HEADERS, withSecurityHeaders } from './security-headers.js';
+
 const NO_STORE = { 'Cache-Control': 'no-store, private' };
 
 function redirect(location) {
-  return new Response(null, { status: 302, headers: { ...NO_STORE, Location: location } });
+  return withSecurityHeaders(new Response(null, { status: 302, headers: { ...NO_STORE, Location: location } }));
 }
 
 function unavailable() {
   return new Response('No fue posible verificar la sesión. Intenta nuevamente.', {
     status: 503,
-    headers: { ...NO_STORE, 'Content-Type': 'text/plain; charset=utf-8' }
+    headers: { ...NO_STORE, ...SECURITY_HEADERS, 'Content-Type': 'text/plain; charset=utf-8' }
   });
 }
 
@@ -41,7 +43,7 @@ async function checkBackend(context, path) {
 
 async function serveProtectedPage(context, requiredRole) {
   if (!['GET', 'HEAD'].includes(context.request.method)) {
-    return new Response('Method not allowed.', { status: 405, headers: { ...NO_STORE, Allow: 'GET, HEAD' } });
+    return withSecurityHeaders(new Response('Method not allowed.', { status: 405, headers: { ...NO_STORE, Allow: 'GET, HEAD' } }));
   }
 
   if (requiredRole === 'administrador') {
@@ -66,7 +68,7 @@ async function serveProtectedPage(context, requiredRole) {
     const asset = await context.env.ASSETS.fetch(context.request);
     const headers = new Headers(asset.headers);
     headers.set('Cache-Control', NO_STORE['Cache-Control']);
-    return new Response(asset.body, { status: asset.status, statusText: asset.statusText, headers });
+    return withSecurityHeaders(new Response(asset.body, { status: asset.status, statusText: asset.statusText, headers }));
   } catch {
     return unavailable();
   }

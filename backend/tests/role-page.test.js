@@ -1,27 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-
-const sourcePath = path.join(__dirname, '..', '..', 'functions', '_shared', 'role-page.js');
-const source = fs.readFileSync(sourcePath, 'utf8').replace(
-    'export { serveProtectedPage };',
-    'module.exports = { serveProtectedPage };'
-);
+const { loadRolePage } = require('./pages-function-loader');
 
 function loadHelper(fetchImpl) {
-    const module = { exports: {} };
-    vm.runInNewContext(source, {
-        module,
-        exports: module.exports,
-        URL,
-        Headers,
-        Request,
-        Response,
-        fetch: fetchImpl
-    }, { filename: sourcePath });
-    return module.exports.serveProtectedPage;
+    return loadRolePage(fetchImpl);
 }
 
 function context(pathname, { roleResponse, assetResponse } = {}) {
@@ -53,6 +35,8 @@ test('admin page is denied by backend role guard before static asset delivery', 
         const response = await setup.handler(setup.context, 'administrador');
         assert.equal(response.status, 302);
         assert.equal(response.headers.get('location'), location);
+        assert.equal(response.headers.get('x-frame-options'), 'DENY');
+        assert.equal(response.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
     }
 });
 
@@ -65,6 +49,7 @@ test('admin page forwards the session to the backend and serves the asset withou
     assert.equal(setup.requests[0].headers.get('x-backend-proxy-secret'), 'synthetic-role-page-secret-for-tests');
     assert.equal(await response.text(), 'protected panel');
     assert.equal(response.headers.get('cache-control'), 'no-store, private');
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
 });
 
 test('user page allows user sessions and routes administrators to their own panel', async () => {

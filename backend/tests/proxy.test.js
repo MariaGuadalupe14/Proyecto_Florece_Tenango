@@ -1,23 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-
-function loadFunction(fetchStub) {
-    const file = path.join(__dirname, '../../functions/api/[[path]].js');
-    const source = fs.readFileSync(file, 'utf8').replace('export async function onRequest', 'async function onRequest') + '\nmodule.exports = { onRequest };';
-    const moduleObject = { exports: {} };
-    vm.runInNewContext(source, {
-        module: moduleObject,
-        URL,
-        Request,
-        Response,
-        Headers,
-        fetch: fetchStub
-    }, { filename: file });
-    return moduleObject.exports.onRequest;
-}
+const { loadApiProxy } = require('./pages-function-loader');
 
 const env = {
     BACKEND_ORIGIN: 'https://backend.example.test',
@@ -31,7 +14,7 @@ test('Pages proxy forwards request details and returns multiple Set-Cookie heade
     responseHeaders.append('Set-Cookie', 'session-b=two; Path=/; HttpOnly; Secure; SameSite=Lax');
     responseHeaders.set('Cache-Control', 'no-store');
     const upstreamResponse = new Response('{"ok":true}', { status: 201, headers: responseHeaders });
-    const onRequest = loadFunction(async request => { forwarded = request; return upstreamResponse; });
+    const onRequest = loadApiProxy(async request => { forwarded = request; return upstreamResponse; });
     const requestBody = '{"correo":"sample@example.invalid","password":"not-a-real-password"}';
     const request = new Request('https://proyecto-florece-tenango.pages.dev/api/auth/registro?source=test', {
         method: 'POST',
@@ -69,10 +52,13 @@ test('Pages proxy forwards request details and returns multiple Set-Cookie heade
 
 test('Pages proxy fails closed when its origin or secret binding is missing', async () => {
     let fetchCalled = false;
-    const onRequest = loadFunction(async () => { fetchCalled = true; return new Response('unexpected'); });
+    const onRequest = loadApiProxy(async () => { fetchCalled = true; return new Response('unexpected'); });
     const request = new Request('https://proyecto-florece-tenango.pages.dev/api/auth/me');
     const response = await onRequest({ request, env: { BACKEND_ORIGIN: env.BACKEND_ORIGIN } });
     assert.equal(response.status, 503);
     assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.get('strict-transport-security'), 'max-age=15552000');
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(response.headers.get('x-frame-options'), 'DENY');
     assert.equal(fetchCalled, false);
 });

@@ -1,10 +1,12 @@
+import { withSecurityHeaders } from '../_shared/security-headers.js';
+
 export async function onRequest(context) {
   const { request, env } = context;
   const proxySecretConfigured = typeof env.BACKEND_PROXY_SECRET === 'string' && env.BACKEND_PROXY_SECRET.length > 0;
-  const unavailable = (status, message) => Response.json({ message }, {
+  const unavailable = (status, message) => withSecurityHeaders(Response.json({ message }, {
     status,
     headers: { 'Cache-Control': 'no-store' }
-  });
+  }));
 
   if (!env.BACKEND_ORIGIN || !env.BACKEND_PROXY_SECRET) {
     console.info('[Pages API proxy diagnostic]', {
