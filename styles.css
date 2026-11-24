@@ -65,3 +65,9 @@
 .auth-switch-link:hover{color:var(--mauve)}
 .password-hint{margin:7px 0 0;color:var(--muted);font-size:9px}
 .auth-form [type=submit]:disabled{opacity:.65;cursor:wait}
+
+/* Controles de sesión en los menús */
+.nav-links .nav-session-control{border:0;font:inherit;font-size:10px;font-weight:600;cursor:pointer}
+.nav-links .nav-session-control:disabled{opacity:.65;cursor:wait}
+.panel-home-link{color:var(--forest);font-weight:700;white-space:nowrap}
+@media(max-width:760px){.nav-links .nav-session-control{font-size:11px}.nav-links .nav-login.nav-session-control{padding:13px 14px}.panel-account{flex-wrap:wrap;justify-content:flex-end}}

@@ -27,6 +27,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const localHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
   const authApi = localHost ? window.location.protocol + '//' + window.location.hostname + ':3000/api/auth' : '/api/auth';
+  const publicView = new URLSearchParams(window.location.search).get('public') === '1';
+  const navLogin = document.querySelector('#nav-login');
+  const navLogout = document.querySelector('#nav-logout');
+
+  function updateSessionNavigation(user) {
+    const authenticated = Boolean(user && user.rol);
+    if (navLogin) navLogin.hidden = authenticated;
+    if (navLogout) navLogout.hidden = !authenticated;
+  }
+
   function redirectForRole(role) {
     if (role === 'administrador') window.location.assign('/admin.html');
     else if (role === 'usuario') window.location.assign('/usuario.html');
@@ -40,7 +50,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Restore an existing session when the visitor returns to the main page.
-  currentUser().then(user => { if (user) redirectForRole(user.rol); }).catch(() => {});
+  currentUser().then(user => {
+    updateSessionNavigation(user);
+    if (user && !publicView) redirectForRole(user.rol);
+  }).catch(() => {});
 
   const loginForm = document.querySelector('#login-form');
   const registerForm = document.querySelector('#register-form');
@@ -88,6 +101,22 @@ document.addEventListener('DOMContentLoaded', () => {
     return { response, body };
   }
 
+  navLogout?.addEventListener('click', async () => {
+    closeMenu();
+    navLogout.disabled = true;
+    try {
+      const result = await sendAuthRequest('logout', {});
+      if (!result.response.ok) throw new Error(result.body.mensaje || 'No se pudo cerrar la sesión.');
+      updateSessionNavigation(null);
+      loginStatus.textContent = 'Sesión cerrada correctamente.';
+      closeMenu();
+    } catch (error) {
+      loginStatus.textContent = error.message || 'No se pudo cerrar la sesión.';
+    } finally {
+      navLogout.disabled = false;
+    }
+  });
+
   loginForm.addEventListener('submit', async event => {
     event.preventDefault();
     loginStatus.textContent = '';
@@ -102,6 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
       password.value = '';
       const user = await currentUser();
       if (!user || !['administrador', 'usuario'].includes(user.rol)) throw new Error('La sesión inició, pero no se pudo verificar el rol de la cuenta.');
+      updateSessionNavigation(user);
       redirectForRole(user.rol);
     } catch (error) {
       loginStatus.textContent = error.message === 'local-backend-only'
