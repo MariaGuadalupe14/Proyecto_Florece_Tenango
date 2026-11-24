@@ -27,6 +27,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const localHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
   const authApi = localHost ? window.location.protocol + '//' + window.location.hostname + ':3000/api/auth' : '/api/auth';
+  function redirectForRole(role) {
+    if (role === 'administrador') window.location.assign('/admin.html');
+    else if (role === 'usuario') window.location.assign('/usuario.html');
+  }
+
+  async function currentUser() {
+    const response = await fetch(authApi + '/me', { credentials: 'include', cache: 'no-store' });
+    if (!response.ok) return null;
+    const body = await response.json().catch(() => ({}));
+    return body.usuario || null;
+  }
+
+  // Restore an existing session when the visitor returns to the main page.
+  currentUser().then(user => { if (user) redirectForRole(user.rol); }).catch(() => {});
+
   const loginForm = document.querySelector('#login-form');
   const registerForm = document.querySelector('#register-form');
   const loginStatus = document.querySelector('#login-status');
@@ -85,7 +100,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const result = await sendAuthRequest('login', { correo: email.value.trim(), password: password.value });
       if (!result.response.ok) throw new Error(result.body.mensaje || 'No se pudo iniciar sesi\u00f3n. Revisa tu correo y contrase\u00f1a.');
       password.value = '';
-      loginStatus.textContent = 'Sesi\u00f3n iniciada' + (result.body.usuario && result.body.usuario.nombre ? ': ' + result.body.usuario.nombre : '') + '.';
+      const user = await currentUser();
+      if (!user || !['administrador', 'usuario'].includes(user.rol)) throw new Error('La sesión inició, pero no se pudo verificar el rol de la cuenta.');
+      redirectForRole(user.rol);
     } catch (error) {
       loginStatus.textContent = error.message === 'local-backend-only'
         ? 'El backend solo est\u00e1 disponible localmente. Abre esta p\u00e1gina desde localhost para iniciar sesi\u00f3n.'

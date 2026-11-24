@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test",
     "start": "node server.js",
-    "create-admin": "node crear-admin.js"
+    "create-admin": "node crear-admin.js",
+    "reset-admin-password": "node restablecer-password-admin.js"
   },
   "keywords": [],
   "author": "",

@@ -104,10 +104,10 @@ app.use(session({
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
+    proxy: sessionCookieSecure ? true : undefined,
     cookie: {
         httpOnly: true,
         secure: sessionCookieSecure, // Can be enabled for an HTTPS tunnel independently of NODE_ENV.
-        proxy: sessionCookieSecure ? true : undefined,
         sameSite: 'lax',
         path: '/',
         maxAge: 1000 * 60 * 60
