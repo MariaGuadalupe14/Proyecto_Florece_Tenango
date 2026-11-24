@@ -2,8 +2,8 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-const argon2 = require('argon2');
 const db = require('./db');
+const { hashPassword } = require('./password-hash');
 const readline = require('readline');
 
 const terminal = readline.createInterface({
@@ -99,9 +99,7 @@ async function crearAdministrador() {
             throw new Error('No existe el rol administrador en la base de datos.');
         }
 
-        const hash = await argon2.hash(password, {
-            type: argon2.argon2id
-        });
+        const hash = await hashPassword(password);
 
         await db.execute(
             `INSERT INTO usuarios

@@ -1,5 +1,5 @@
-const argon2 = require('argon2');
 const db = require('./db');
+const { hashPassword } = require('./password-hash');
 
 const ADMIN_EMAIL = 'florecetenango@gmail.com';
 const ADMIN_ROLE = 'administrador';
@@ -86,7 +86,7 @@ async function main() {
             throw new Error('Las contraseñas no coinciden. No se modificó la base de datos.');
         }
 
-        const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+        const passwordHash = await hashPassword(password);
         const [result] = await db.execute(
             `UPDATE usuarios AS u
              INNER JOIN roles AS r ON r.id = u.rol_id

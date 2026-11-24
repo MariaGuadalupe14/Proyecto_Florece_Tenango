@@ -1,7 +1,7 @@
 
 const express = require('express');
 const crypto = require('crypto');
-const argon2 = require('argon2');
+const { hashPassword, verifyPassword } = require('./password-hash');
 const db = require('./db');
 const { rateLimit } = require('express-rate-limit');
 
@@ -151,9 +151,7 @@ router.post('/registro', registrationLimit, requireCsrf, async (req, res) => {
             });
         }
 
-        const passwordHash = await argon2.hash(password, {
-            type: argon2.argon2id
-        });
+        const passwordHash = await hashPassword(password);
 
         // El registro público solamente crea usuarios normales
         const [resultado] = await db.execute(
@@ -232,18 +230,28 @@ router.post('/login', loginLimit, requireCsrf, async (req, res) => {
 
         const usuario = usuarios[0];
 
-        const passwordCorrecta = await argon2.verify(
-            usuario.password_hash,
-            password
-        );
+        const verification = await verifyPassword(password, usuario.password_hash);
 
         // Contraseña incorrecta
-        if (!passwordCorrecta) {
+        if (!verification.valid) {
             await registrarIntento(correoLimpio, ip, false);
 
             return res.status(401).json({
                 mensaje: 'Correo o contraseña incorrectos.'
             });
+        }
+
+        if (verification.needsRehash) {
+            const upgradedHash = await hashPassword(password);
+            try {
+                await db.execute(
+                    'UPDATE usuarios SET password_hash = ? WHERE id = ? AND password_hash = ?',
+                    [upgradedHash, usuario.id, usuario.password_hash]
+                );
+            } catch (error) {
+                // A valid login remains available; a later login can retry a failed upgrade.
+                console.error('Password hash upgrade failed:', (error.code || 'UNKNOWN_ERROR'));
+            }
         }
 
         // Crear una sesión nueva

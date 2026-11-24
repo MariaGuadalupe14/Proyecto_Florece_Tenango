@@ -4,6 +4,7 @@ const Module = require('node:module');
 const express = require('express');
 const argon2 = require('argon2');
 const { once } = require('node:events');
+const { verifyPassword, PBKDF2_SCHEME, PBKDF2_ITERATIONS } = require('../password-hash');
 
 const users = new Map();
 const accessAttempts = [];
@@ -26,6 +27,13 @@ const fakeDb = {
             }
             const [nombre, correo, password_hash] = params;
             users.set(correo, { id: users.size + 1, nombre, correo, password_hash, rol: 'usuario' });
+            return [{ affectedRows: 1 }, []];
+        }
+        if (sql.includes('UPDATE usuarios SET password_hash = ? WHERE id = ? AND password_hash = ?')) {
+            const [password_hash, id, oldHash] = params;
+            const user = [...users.values()].find(candidate => candidate.id === id);
+            if (!user || user.password_hash !== oldHash) return [{ affectedRows: 0 }, []];
+            user.password_hash = password_hash;
             return [{ affectedRows: 1 }, []];
         }
         if (sql.includes('SELECT u.id, u.nombre, u.correo, u.password_hash')) {
@@ -123,7 +131,7 @@ async function post(path, body, extraHeaders = {}) {
     });
 }
 
-test('registration validates fields and stores an Argon2id hash', async () => {
+test('registration validates fields and stores a salted PBKDF2-HMAC-SHA-256 hash', async () => {
     const invalid = await post('/api/auth/registro', {
         nombre: 'Test User', correo: 'invalid', password: 'short'
     });
@@ -135,8 +143,10 @@ test('registration validates fields and stores an Argon2id hash', async () => {
     });
     assert.equal(response.status, 201);
     const saved = users.get('test@example.invalid');
-    assert.match(saved.password_hash, /^\$argon2id\$/);
-    assert.equal(await argon2.verify(saved.password_hash, password), true);
+    const [scheme, iterations] = saved.password_hash.split('$');
+    assert.equal(scheme, PBKDF2_SCHEME);
+    assert.equal(Number(iterations), PBKDF2_ITERATIONS);
+    assert.equal((await verifyPassword(password, saved.password_hash)).valid, true);
     assert.equal(saved.password_hash.includes(password), false);
 });
 
@@ -161,6 +171,43 @@ test('login accepts the correct password and omits the stored hash from its resp
     assert.equal(accessAttempts.at(-1).exitoso, true);
     assert.equal(sessionStates.at(-1).regenerated, true);
     assert.equal(sessionStates.at(-1).saved, true);
+    assert.equal(users.get('test@example.invalid').password_hash.startsWith(`${PBKDF2_SCHEME}$`), true);
+});
+
+test('an administrator with a legacy Argon2id hash can log in and is migrated safely', async () => {
+    const password = 'Synthetic-legacy-admin-password-2026!';
+    const legacyHash = await argon2.hash(password, { type: argon2.argon2id });
+    users.set('legacy-admin@example.invalid', {
+        id: 9001, nombre: 'Synthetic Admin', correo: 'legacy-admin@example.invalid',
+        password_hash: legacyHash, rol: 'administrador'
+    });
+
+    const response = await post('/api/auth/login', {
+        correo: 'legacy-admin@example.invalid', password
+    }, { 'x-test-session': 'legacy-admin-session' });
+
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).usuario.rol, 'administrador');
+    const migratedHash = users.get('legacy-admin@example.invalid').password_hash;
+    assert.notEqual(migratedHash, legacyHash);
+    assert.equal(migratedHash.startsWith(`${PBKDF2_SCHEME}$`), true);
+    assert.equal((await verifyPassword(password, migratedHash)).valid, true);
+});
+
+test('an incorrect password does not migrate an Argon2id account', async () => {
+    const password = 'Synthetic-legacy-user-password-2026!';
+    const legacyHash = await argon2.hash(password, { type: argon2.argon2id });
+    users.set('legacy-user@example.invalid', {
+        id: 9002, nombre: 'Synthetic User', correo: 'legacy-user@example.invalid',
+        password_hash: legacyHash, rol: 'usuario'
+    });
+
+    const response = await post('/api/auth/login', {
+        correo: 'legacy-user@example.invalid', password: 'Wrong-synthetic-password'
+    }, { 'x-test-session': 'legacy-user-session' });
+
+    assert.equal(response.status, 401);
+    assert.equal(users.get('legacy-user@example.invalid').password_hash, legacyHash);
 });
 
 test('login rejects an incorrect password and logs no password field', async () => {
