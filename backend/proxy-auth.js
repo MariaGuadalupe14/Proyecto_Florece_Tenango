@@ -24,10 +24,19 @@ function createProxyAuthMiddleware({ secret, isProduction }) {
     return (req, res, next) => {
         const origin = req.get('Origin') || '';
         const fromCloudflareEdge = Boolean(req.get('CF-Ray') || req.get('CF-Connecting-IP'));
+        const presentedSecret = req.get('X-Backend-Proxy-Secret');
+        const proxySecretConfigured = typeof secret === 'string' && secret.length > 0;
+        const proxyHeaderReceived = typeof presentedSecret === 'string' && presentedSecret.length > 0;
+        const proxySecretMatches = matchesSecret(presentedSecret, secret);
+        console.info('[proxy-auth diagnostic]', {
+            proxySecretConfigured,
+            proxyHeaderReceived,
+            proxySecretMatches
+        });
         const localDevelopmentRequest = !isProduction && !fromCloudflareEdge &&
             isLoopbackAddress(req.socket?.remoteAddress) && (!origin || isLocalDevelopmentOrigin(origin));
         if (localDevelopmentRequest) return next();
-        if (matchesSecret(req.get('X-Backend-Proxy-Secret'), secret)) return next();
+        if (proxySecretMatches) return next();
         res.setHeader('Cache-Control', 'no-store');
         return res.status(403).json({ mensaje: 'Solicitud no autorizada.' });
     };
