@@ -1,11 +1,16 @@
 export async function onRequest(context) {
   const { request, env } = context;
+  const proxySecretConfigured = typeof env.BACKEND_PROXY_SECRET === 'string' && env.BACKEND_PROXY_SECRET.length > 0;
   const unavailable = (status, message) => Response.json({ message }, {
     status,
     headers: { 'Cache-Control': 'no-store' }
   });
 
   if (!env.BACKEND_ORIGIN || !env.BACKEND_PROXY_SECRET) {
+    console.info('[Pages API proxy diagnostic]', {
+      proxySecretConfigured,
+      proxyHeaderSet: false
+    });
     return unavailable(503, 'API proxy is not configured.');
   }
 
@@ -32,6 +37,11 @@ export async function onRequest(context) {
     ]) headers.delete(name);
 
     headers.set('x-backend-proxy-secret', env.BACKEND_PROXY_SECRET);
+    const proxyHeaderSet = headers.has('x-backend-proxy-secret');
+    console.info('[Pages API proxy diagnostic]', {
+      proxySecretConfigured,
+      proxyHeaderSet
+    });
     headers.set('x-forwarded-proto', incoming.protocol.slice(0, -1));
     headers.set('x-forwarded-host', incoming.host);
     headers.set('cache-control', 'no-store');
