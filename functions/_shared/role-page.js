@@ -41,7 +41,7 @@ async function checkBackend(context, path) {
   }
 }
 
-async function serveProtectedPage(context, requiredRole) {
+async function serveProtectedPage(context, requiredRole, assetPath = null) {
   if (!['GET', 'HEAD'].includes(context.request.method)) {
     return withSecurityHeaders(new Response('Method not allowed.', { status: 405, headers: { ...NO_STORE, Allow: 'GET, HEAD' } }));
   }
@@ -65,7 +65,13 @@ async function serveProtectedPage(context, requiredRole) {
   }
 
   try {
-    const asset = await context.env.ASSETS.fetch(context.request);
+    const assetRequest = assetPath
+      ? new Request(new URL(assetPath, context.request.url), {
+          method: context.request.method,
+          headers: context.request.headers
+        })
+      : context.request;
+    const asset = await context.env.ASSETS.fetch(assetRequest);
     const headers = new Headers(asset.headers);
     headers.set('Cache-Control', NO_STORE['Cache-Control']);
     return withSecurityHeaders(new Response(asset.body, { status: asset.status, statusText: asset.statusText, headers }));

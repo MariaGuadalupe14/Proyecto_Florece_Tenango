@@ -34,8 +34,9 @@
       const { response, user } = await fetchCurrentUser();
       if (response.status === 401 || !user) return redirectForRole(null);
       if (!await confirmPageAccess(user)) return redirectForRole(user.rol);
-      const name = document.querySelector('[data-user-name]');
-      if (name) name.textContent = user.nombre || 'Usuario';
+      document.querySelectorAll('[data-user-name]').forEach(name => {
+        name.textContent = user.nombre || 'Usuario';
+      });
       root.hidden = false;
       document.dispatchEvent(new CustomEvent('panel:authorized', { detail: { role: user.rol } }));
     } catch {

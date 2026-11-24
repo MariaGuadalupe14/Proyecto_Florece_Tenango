@@ -242,12 +242,16 @@ router.post('/login', loginLimit, requireCsrf, async (req, res) => {
         }
 
         if (verification.needsRehash) {
-            const upgradedHash = await hashPassword(password);
             try {
-                await db.execute(
+                const upgradedHash = await hashPassword(password);
+                const [upgradeResult] = await db.execute(
                     'UPDATE usuarios SET password_hash = ? WHERE id = ? AND password_hash = ?',
                     [upgradedHash, usuario.id, usuario.password_hash]
                 );
+
+                if (upgradeResult?.affectedRows !== 1) {
+                    console.warn('Password hash upgrade did not update a row; the stored hash may have changed concurrently.');
+                }
             } catch (error) {
                 // A valid login remains available; a later login can retry a failed upgrade.
                 console.error('Password hash upgrade failed:', (error.code || 'UNKNOWN_ERROR'));

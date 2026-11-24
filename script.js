@@ -28,13 +28,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const localHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
   const authApi = localHost ? window.location.protocol + '//' + window.location.hostname + ':3000/api/auth' : '/api/auth';
   const publicView = new URLSearchParams(window.location.search).get('public') === '1';
+  const userHome = window.location.pathname.endsWith('/usuario.html');
   const navLogin = document.querySelector('#nav-login');
   const navLogout = document.querySelector('#nav-logout');
+  const navGreeting = document.querySelector('#nav-greeting');
 
   function updateSessionNavigation(user) {
     const authenticated = Boolean(user && user.rol);
     if (navLogin) navLogin.hidden = authenticated;
     if (navLogout) navLogout.hidden = !authenticated;
+    if (navGreeting) {
+      navGreeting.hidden = !authenticated;
+      navGreeting.textContent = authenticated ? `Hola, ${(user.nombre || 'usuario').trim().split(/\s+/)[0]}` : '';
+    }
   }
 
   function redirectForRole(role) {
@@ -52,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Restore an existing session when the visitor returns to the main page.
   currentUser().then(user => {
     updateSessionNavigation(user);
-    if (user && !publicView) redirectForRole(user.rol);
+    if (user && !publicView && !(userHome && user.rol === 'usuario')) redirectForRole(user.rol);
   }).catch(() => {});
 
   const loginForm = document.querySelector('#login-form');
@@ -110,6 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateSessionNavigation(null);
       loginStatus.textContent = 'Sesión cerrada correctamente.';
       closeMenu();
+      if (userHome) window.location.replace('/index.html');
     } catch (error) {
       loginStatus.textContent = error.message || 'No se pudo cerrar la sesión.';
     } finally {

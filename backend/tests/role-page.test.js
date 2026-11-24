@@ -8,6 +8,7 @@ function loadHelper(fetchImpl) {
 
 function context(pathname, { roleResponse, assetResponse } = {}) {
     const requests = [];
+    const assetRequests = [];
     const handler = loadHelper(async request => {
         requests.push(request);
         return roleResponse;
@@ -17,13 +18,17 @@ function context(pathname, { roleResponse, assetResponse } = {}) {
     });
     return {
         requests,
+        assetRequests,
         handler,
         context: {
             request,
             env: {
                 BACKEND_ORIGIN: 'https://backend.example.test',
                 BACKEND_PROXY_SECRET: 'synthetic-role-page-secret-for-tests',
-                ASSETS: { fetch: async () => assetResponse || new Response('protected panel') }
+                ASSETS: { fetch: async request => {
+                    assetRequests.push(request);
+                    return assetResponse || new Response('protected panel');
+                } }
             }
         }
     };
@@ -54,9 +59,10 @@ test('admin page forwards the session to the backend and serves the asset withou
 
 test('user page allows user sessions and routes administrators to their own panel', async () => {
     const user = context('/usuario.html', { roleResponse: Response.json({ usuario: { rol: 'usuario' } }) });
-    const userResponse = await user.handler(user.context, 'usuario');
+    const userResponse = await user.handler(user.context, 'usuario', '/index.html');
     assert.equal(await userResponse.text(), 'protected panel');
     assert.equal(new URL(user.requests[0].url).pathname, '/api/auth/me');
+    assert.equal(new URL(user.assetRequests[0].url).pathname, '/index.html');
 
     const admin = context('/usuario.html', { roleResponse: Response.json({ usuario: { rol: 'administrador' } }) });
     const adminResponse = await admin.handler(admin.context, 'usuario');

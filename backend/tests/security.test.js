@@ -12,6 +12,8 @@ const activity = [];
 const sessionStates = [];
 const testSessions = new Map();
 let rejectNextUserInsert = false;
+let migrationUpdateMode = 'normal';
+let testIpCounter = 1;
 const fakeDb = {
     async execute(sql, params = []) {
         if (sql.includes('SELECT id FROM usuarios WHERE correo = ?')) {
@@ -31,6 +33,12 @@ const fakeDb = {
         }
         if (sql.includes('UPDATE usuarios SET password_hash = ? WHERE id = ? AND password_hash = ?')) {
             const [password_hash, id, oldHash] = params;
+            if (migrationUpdateMode === 'error') {
+                const error = new Error('Synthetic database failure');
+                error.code = 'ER_SYNTHETIC';
+                throw error;
+            }
+            if (migrationUpdateMode === 'zero') return [{ affectedRows: 0 }, []];
             const user = [...users.values()].find(candidate => candidate.id === id);
             if (!user || user.password_hash !== oldHash) return [{ affectedRows: 0 }, []];
             user.password_hash = password_hash;
@@ -72,6 +80,7 @@ const { detectarIntentosSospechosos } = require('../detector');
 const app = express();
 app.use(express.json());
 app.use((req, res, next) => {
+    if (req.get('x-test-ip')) Object.defineProperty(req, 'ip', { value: req.get('x-test-ip') });
     const sessionId = req.get('x-test-session') || 'default-test-session';
     let state = testSessions.get(sessionId);
     if (!state) {
@@ -123,9 +132,13 @@ async function postRaw(path, body, extraHeaders = {}) {
 
 async function post(path, body, extraHeaders = {}) {
     const sessionId = extraHeaders['x-test-session'] || 'default-test-session';
+    const testIp = extraHeaders['x-test-ip'] || (path === '/api/auth/login'
+        ? `192.0.2.${testIpCounter++}`
+        : '192.0.2.250');
     const csrf = await csrfFor(path, sessionId, extraHeaders);
     return postRaw(path, body, {
         'x-test-session': sessionId,
+        'x-test-ip': testIp,
         'x-csrf-token': csrf.csrfToken,
         ...extraHeaders
     });
@@ -192,6 +205,66 @@ test('an administrator with a legacy Argon2id hash can log in and is migrated sa
     assert.notEqual(migratedHash, legacyHash);
     assert.equal(migratedHash.startsWith(`${PBKDF2_SCHEME}$`), true);
     assert.equal((await verifyPassword(password, migratedHash)).valid, true);
+});
+
+test('a verified Argon2id login succeeds when the migration update affects zero rows', async () => {
+    const password = 'Synthetic-zero-row-admin-password-2026!';
+    const legacyHash = await argon2.hash(password, { type: argon2.argon2id });
+    users.set('zero-row-admin@example.invalid', {
+        id: 9003, nombre: 'Synthetic Admin', correo: 'zero-row-admin@example.invalid',
+        password_hash: legacyHash, rol: 'administrador'
+    });
+    const warnings = [];
+    const originalWarn = console.warn;
+    migrationUpdateMode = 'zero';
+    console.warn = (...args) => warnings.push(args.join(' '));
+
+    let response;
+    try {
+        response = await post('/api/auth/login', {
+            correo: 'zero-row-admin@example.invalid', password
+        }, { 'x-test-session': 'zero-row-admin-session' });
+    } finally {
+        migrationUpdateMode = 'normal';
+        console.warn = originalWarn;
+    }
+
+    assert.equal(response.status, 200);
+    assert.equal(users.get('zero-row-admin@example.invalid').password_hash, legacyHash);
+    assert.equal(warnings.some(message => message.includes('did not update a row')), true);
+    assert.equal(warnings.join(' ').includes(password), false);
+    assert.equal(warnings.join(' ').includes(legacyHash), false);
+    assert.equal(warnings.join(' ').includes('zero-row-admin@example.invalid'), false);
+});
+
+test('a verified Argon2id login succeeds and logs a safe code when the migration update errors', async () => {
+    const password = 'Synthetic-db-error-admin-password-2026!';
+    const legacyHash = await argon2.hash(password, { type: argon2.argon2id });
+    users.set('db-error-admin@example.invalid', {
+        id: 9004, nombre: 'Synthetic Admin', correo: 'db-error-admin@example.invalid',
+        password_hash: legacyHash, rol: 'administrador'
+    });
+    const errors = [];
+    const originalError = console.error;
+    migrationUpdateMode = 'error';
+    console.error = (...args) => errors.push(args.join(' '));
+
+    let response;
+    try {
+        response = await post('/api/auth/login', {
+            correo: 'db-error-admin@example.invalid', password
+        }, { 'x-test-session': 'db-error-admin-session' });
+    } finally {
+        migrationUpdateMode = 'normal';
+        console.error = originalError;
+    }
+
+    assert.equal(response.status, 200);
+    assert.equal(users.get('db-error-admin@example.invalid').password_hash, legacyHash);
+    assert.equal(errors.some(message => message.includes('Password hash upgrade failed: ER_SYNTHETIC')), true);
+    assert.equal(errors.join(' ').includes(password), false);
+    assert.equal(errors.join(' ').includes(legacyHash), false);
+    assert.equal(errors.join(' ').includes('db-error-admin@example.invalid'), false);
 });
 
 test('an incorrect password does not migrate an Argon2id account', async () => {

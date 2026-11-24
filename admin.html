@@ -4,42 +4,80 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f3e9">
-    <title>Panel administrativo | Florece Tenango</title>
+    <title>Administración | Florece Tenango</title>
     <link rel="icon" href="favicon.ico" sizes="any">
-    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="favicon-192x192.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="favicon-512x512.png">
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="stylesheet" href="styles.css">
     <script src="panel.js" defer></script>
     <script src="admin-content.js" defer></script>
   </head>
-  <body class="panel-page">
-    <main class="panel-shell" data-required-role="administrador" hidden>
-      <header class="panel-header">
-        <a class="brand" href="index.html?public=1#inicio" aria-label="Florece Tenango, inicio"><img class="brand-logo" src="Imagenes/SF_Logo_Florece_Tenango.png" alt="Florece Tenango"></a>
-        <nav class="panel-account" aria-label="Navegación de cuenta"><a class="panel-home-link" href="index.html?public=1#comercios">Comercios</a><span>Sesión de administrador</span><button class="button panel-logout" id="logout-button" type="button">Cerrar sesión</button></nav>
-      </header>
-      <section class="panel-welcome" aria-labelledby="admin-title">
-        <p class="eyebrow"><span></span> Administración segura</p>
-        <h1 id="admin-title">Panel <em>administrativo.</em></h1>
-        <p>Bienvenida, <strong data-user-name>Administradora</strong>. El acceso se valida con tu sesión y el rol del backend.</p>
-      </section>
-      <section class="panel-stage content-manager" aria-labelledby="admin-stage-title">
-        <div class="section-heading"><div><p class="eyebrow"><span></span> Contenido</p><h2 id="admin-stage-title">Gestiona <em>Florece Tenango</em></h2></div><p class="section-lead">Administra comercios, videos e imágenes. Los cambios requieren tu sesión de administradora.</p></div>
-        <div class="content-tabs" role="tablist" aria-label="Módulos de contenido">
-          <button type="button" class="content-tab is-active" role="tab" aria-selected="true" data-content-tab="comercios">Comercios</button>
-          <button type="button" class="content-tab" role="tab" aria-selected="false" data-content-tab="videos">Videos</button>
-          <button type="button" class="content-tab" role="tab" aria-selected="false" data-content-tab="galeria">Galería</button>
+  <body class="admin-page panel-page">
+    <main class="admin-shell" data-required-role="administrador" hidden>
+      <aside class="admin-sidebar" aria-label="Navegación administrativa">
+        <a class="admin-brand" href="index.html?public=1#inicio" aria-label="Florece Tenango, inicio">
+          <img src="Imagenes/SF_Logo_Florece_Tenango.png" alt="Florece Tenango">
+        </a>
+        <p class="admin-side-label">Espacio de trabajo</p>
+        <a class="admin-side-link is-current" href="#admin-overview">Resumen <span>01</span></a>
+        <p class="admin-side-label">Contenido</p>
+        <div class="admin-module-nav" role="tablist" aria-label="Módulos de contenido">
+          <button class="admin-side-link is-current" type="button" role="tab" aria-selected="true" data-content-tab="comercios"><span class="admin-side-icon">✿</span> Comercios</button>
+          <button class="admin-side-link" type="button" role="tab" aria-selected="false" data-content-tab="videos"><span class="admin-side-icon">▷</span> Videos</button>
+          <button class="admin-side-link" type="button" role="tab" aria-selected="false" data-content-tab="galeria"><span class="admin-side-icon">▧</span> Galería</button>
         </div>
-        <div class="content-toolbar"><label>Buscar <input id="content-search" type="search" placeholder="Nombre o título" autocomplete="off"></label><button class="button content-add" id="content-add" type="button">Agregar registro</button></div>
-        <p class="content-message" id="content-message" role="status" aria-live="polite"></p>
-        <div class="content-table-wrap"><table class="content-table"><thead id="content-head"></thead><tbody id="content-rows"></tbody></table></div>
-      </section>
-      <p class="panel-status" id="panel-status" role="status" aria-live="polite"></p>
-      <footer class="panel-footer"><a href="index.html?public=1#inicio">Volver a Florece Tenango</a><span>Florece Tenango · Panel administrativo</span></footer>
+        <div class="admin-sidebar-bottom">
+          <a class="admin-public-link" href="index.html?public=1#inicio">↗ Ver sitio público</a>
+          <span class="admin-secure-note"><i aria-hidden="true"></i> Sesión protegida</span>
+        </div>
+      </aside>
+
+      <div class="admin-main">
+        <header class="admin-topbar">
+          <div><span class="admin-breadcrumb">Florece Tenango</span><span class="admin-breadcrumb-separator">/</span><strong>Administración</strong></div>
+          <div class="admin-account"><span class="admin-account-avatar" aria-hidden="true">F</span><span class="admin-account-name"><strong data-user-name>Administradora</strong><small>Administradora</small></span><button class="admin-logout" id="logout-button" type="button">Cerrar sesión</button></div>
+        </header>
+
+        <section class="admin-overview" id="admin-overview" aria-labelledby="admin-title">
+          <div class="admin-welcome-copy">
+            <p class="eyebrow"><span></span> Administración de contenido</p>
+            <h1 id="admin-title">Un espacio para hacer<br><em>florecer Tenango.</em></h1>
+            <p>Bienvenida, <strong data-user-name>Administradora</strong>. Desde aquí puedes cuidar y actualizar los contenidos públicos del proyecto.</p>
+          </div>
+          <div class="admin-welcome-art" aria-hidden="true">
+            <img src="Fotos_Tenango/Galeria/tenango-12.webp" alt="">
+            <span>Floricultura · Comunidad · Territorio</span>
+          </div>
+        </section>
+
+        <section class="admin-modules" aria-labelledby="modules-title">
+          <div class="admin-section-heading"><div><p class="eyebrow"><span></span> Tus módulos</p><h2 id="modules-title">Gestiona el <em>contenido</em></h2></div><p>Elige una sección para revisar, editar o publicar sus registros.</p></div>
+          <div class="admin-module-cards">
+            <button class="admin-module-card" type="button" data-content-tab="comercios" aria-label="Gestionar comercios">
+              <span class="admin-module-mark">01 <i>✿</i></span><span class="admin-module-type">Directorio local</span><strong>Comercios</strong><span class="admin-module-action">Abrir módulo <b>↗</b></span>
+            </button>
+            <button class="admin-module-card" type="button" data-content-tab="videos" aria-label="Gestionar videos">
+              <span class="admin-module-mark">02 <i>▷</i></span><span class="admin-module-type">Relatos audiovisuales</span><strong>Videos</strong><span class="admin-module-action">Abrir módulo <b>↗</b></span>
+            </button>
+            <button class="admin-module-card" type="button" data-content-tab="galeria" aria-label="Gestionar galería">
+              <span class="admin-module-mark">03 <i>▧</i></span><span class="admin-module-type">Colección visual</span><strong>Galería</strong><span class="admin-module-action">Abrir módulo <b>↗</b></span>
+            </button>
+          </div>
+        </section>
+
+        <section class="admin-content-work content-manager" id="content-manager" aria-labelledby="admin-stage-title">
+          <div class="admin-work-heading"><div><p class="eyebrow"><span></span> Gestión del sitio</p><h2 id="admin-stage-title">Contenido <em>publicado</em></h2></div><span class="admin-work-badge"><i aria-hidden="true"></i> Conectado</span></div>
+          <div class="content-toolbar"><label>Buscar en este módulo <input id="content-search" type="search" placeholder="Nombre o título" autocomplete="off"></label><button class="button content-add" id="content-add" type="button">＋ &nbsp; Agregar registro</button></div>
+          <p class="content-message" id="content-message" role="status" aria-live="polite"></p>
+          <div class="content-table-wrap"><table class="content-table"><thead id="content-head"></thead><tbody id="content-rows"></tbody></table></div>
+          <p class="admin-data-note">Los cambios se guardan con tu sesión administrativa y las protecciones actuales del sistema.</p>
+        </section>
+
+        <p class="panel-status" id="panel-status" role="status" aria-live="polite"></p>
+        <footer class="admin-footer"><span>Florece Tenango <i>·</i> Administración</span><a href="index.html?public=1#inicio">Volver al sitio público ↗</a></footer>
+      </div>
     </main>
+
     <dialog class="content-dialog" id="content-dialog" aria-labelledby="content-dialog-title">
       <form id="content-form" class="content-form" novalidate>
         <header class="content-dialog-header"><div><p class="eyebrow"><span></span> Contenido</p><h2 id="content-dialog-title">Agregar registro</h2></div><button class="privacy-close" type="button" id="content-dialog-close" aria-label="Cerrar formulario">×</button></header>

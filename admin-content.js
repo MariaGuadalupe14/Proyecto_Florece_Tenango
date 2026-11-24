@@ -222,12 +222,13 @@
   tabButtons.forEach(button => button.addEventListener('click', () => {
     activeType = button.dataset.contentTab;
     tabButtons.forEach(tab => {
-      const selected = tab === button;
+      const selected = tab.dataset.contentTab === activeType;
       tab.classList.toggle('is-active', selected);
-      tab.setAttribute('aria-selected', String(selected));
+      if (tab.getAttribute('role') === 'tab') tab.setAttribute('aria-selected', String(selected));
     });
     searchInput.value = '';
     loadItems();
+    document.querySelector('#content-manager')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }));
 
   $('#content-add').addEventListener('click', () => openEditor());
