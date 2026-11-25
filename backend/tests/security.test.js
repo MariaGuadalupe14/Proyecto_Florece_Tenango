@@ -16,6 +16,7 @@ let migrationUpdateMode = 'normal';
 let testIpCounter = 1;
 let nextUserId = 1;
 let nextSyntheticUserId = 20000;
+let nextActivityId = 1;
 let deletionFailureMode = 'none';
 const fakeDb = {
     async getConnection() {
@@ -25,7 +26,8 @@ const fakeDb = {
                 snapshot = {
                     users: new Map([...users].map(([email, user]) => [email, { ...user }])),
                     sessions: new Map(testSessions),
-                    activity: activity.slice()
+                    activity: activity.map(row => ({ ...row })),
+                    accessAttempts: accessAttempts.map(row => ({ ...row }))
                 };
             },
             async execute(sql, params = []) {
@@ -39,6 +41,11 @@ const fakeDb = {
                     error.code = 'ER_SYNTHETIC_AUDIT';
                     throw error;
                 }
+                if (deletionFailureMode === 'purge-delete' && sql.includes('DELETE FROM usuarios WHERE id = ? AND activo = FALSE')) {
+                    const error = new Error('Synthetic purge delete failure');
+                    error.code = 'ER_SYNTHETIC_PURGE';
+                    throw error;
+                }
                 return fakeDb.execute(sql, params);
             },
             async commit() { snapshot = null; },
@@ -49,6 +56,7 @@ const fakeDb = {
                 testSessions.clear();
                 for (const [id, session] of snapshot.sessions) testSessions.set(id, session);
                 activity.splice(0, activity.length, ...snapshot.activity);
+                accessAttempts.splice(0, accessAttempts.length, ...snapshot.accessAttempts);
                 snapshot = null;
             },
             release() {}
@@ -74,11 +82,33 @@ const fakeDb = {
             const user = [...users.values()].find(candidate => candidate.id === Number(params[0]));
             return [user && user.activo !== false ? [{ id: user.id }] : [], []];
         }
+        if (sql.includes('SELECT ra.id AS request_id')) {
+            const pending = activity.filter(row => row.evento === 'SOLICITUD_ELIMINACION_CUENTA' && row.usuarioId !== null)
+                .map(row => {
+                    const user = [...users.values()].find(candidate => candidate.id === row.usuarioId);
+                    return user && user.activo === false
+                        ? { request_id: row.id, usuario_id: user.id, fecha: row.fecha, rol: user.rol }
+                        : null;
+                }).filter(Boolean);
+            return [pending, []];
+        }
         if (sql.includes('SELECT u.id, u.password_hash, u.activo, r.nombre AS rol')) {
             const user = [...users.values()].find(candidate => candidate.id === Number(params[0]));
             return [user ? [{ id: user.id, password_hash: user.password_hash, activo: user.activo !== false, rol: user.rol }] : [], []];
         }
-        if (sql.includes('SELECT u.id') && sql.includes('FROM usuarios u') && sql.includes("r.nombre = 'administrador'")) {
+        if (sql.includes('SELECT id, usuario_id') && sql.includes("evento = 'SOLICITUD_ELIMINACION_CUENTA'")) {
+            const row = activity.find(item => item.id === Number(params[0]) && item.evento === 'SOLICITUD_ELIMINACION_CUENTA' && item.usuarioId !== null);
+            return [row ? [{ id: row.id, usuario_id: row.usuarioId }] : [], []];
+        }
+        if (sql.includes('SELECT u.id, u.correo, u.activo, u.fecha_creacion, r.nombre AS rol')) {
+            const user = [...users.values()].find(candidate => candidate.id === Number(params[0]));
+            return [user ? [{ id: user.id, correo: user.correo, activo: user.activo, fecha_creacion: user.fecha_creacion, rol: user.rol }] : [], []];
+        }
+        if (sql.includes("r.nombre = 'administrador'") && sql.includes('u.activo = TRUE') && sql.includes('WHERE u.id = ?')) {
+            const user = [...users.values()].find(candidate => candidate.id === Number(params[0]) && candidate.rol === 'administrador' && candidate.activo !== false);
+            return [user ? [{ id: user.id }] : [], []];
+        }
+        if (sql.includes('SELECT u.id') && sql.includes('FROM usuarios u') && sql.includes("r.nombre = 'administrador'") && sql.includes('ORDER BY u.id')) {
             return [[...users.values()]
                 .filter(user => user.rol === 'administrador' && user.activo !== false)
                 .sort((a, b) => a.id - b.id)
@@ -95,6 +125,33 @@ const fakeDb = {
             if (!user || user.activo === false) return [{ affectedRows: 0 }, []];
             user.activo = false;
             return [{ affectedRows: 1 }, []];
+        }
+        if (sql.includes('DELETE FROM usuarios WHERE id = ? AND activo = FALSE')) {
+            const user = [...users.values()].find(candidate => candidate.id === Number(params[0]));
+            if (!user || user.activo !== false) return [{ affectedRows: 0 }, []];
+            users.delete(user.correo);
+            return [{ affectedRows: 1 }, []];
+        }
+        if (sql.includes('DELETE FROM intentos_acceso WHERE correo = ? AND fecha >= ?')) {
+            const [email, createdAt] = params;
+            const before = accessAttempts.length;
+            for (let index = accessAttempts.length - 1; index >= 0; index--) {
+                const row = accessAttempts[index];
+                if (row.correo === email && row.fecha >= createdAt) accessAttempts.splice(index, 1);
+            }
+            return [{ affectedRows: before - accessAttempts.length }, []];
+        }
+        if (sql.includes('UPDATE registros_actividad') && sql.includes('SET usuario_id = NULL')) {
+            let changed = 0;
+            for (const row of activity) {
+                if (row.usuarioId === Number(params[0])) {
+                    row.usuarioId = null;
+                    row.ip = '';
+                    row.descripcion = 'Evento de cuenta anonimizado.';
+                    changed++;
+                }
+            }
+            return [{ affectedRows: changed }, []];
         }
         if (sql.includes('DELETE FROM sesiones WHERE session_id = ?')) {
             return [{ affectedRows: testSessions.delete(params[0]) ? 1 : 0 }, []];
@@ -117,11 +174,17 @@ const fakeDb = {
             return [user && user.activo !== false ? [{ ...user, activo: true }] : [], []];
         }
         if (sql.includes('INSERT INTO intentos_acceso')) {
-            accessAttempts.push({ correo: params[0], ip: params[1], exitoso: params[2] });
+            accessAttempts.push({ correo: params[0], ip: params[1], exitoso: params[2], fecha: new Date() });
             return [{ affectedRows: 1 }, []];
         }
         if (sql.includes('INSERT INTO registros_actividad')) {
-            activity.push({ usuarioId: params[0], evento: params[1] });
+            const completedPurge = sql.includes("'ELIMINACION_CUENTA_COMPLETADA'");
+            activity.push({
+                id: nextActivityId++, usuarioId: params[0],
+                evento: completedPurge ? 'ELIMINACION_CUENTA_COMPLETADA' : params[1],
+                descripcion: completedPurge ? params[1] : params[2],
+                ip: completedPurge ? '' : params[3], fecha: new Date()
+            });
             return [{ affectedRows: 1 }, []];
         }
         if (sql.includes('FROM intentos_acceso')) {
@@ -226,10 +289,22 @@ async function createSyntheticUser({ email, role = 'usuario', password = 'Synthe
         correo: email,
         password_hash: await hashPassword(password),
         rol: role,
-        activo: true
+        activo: true,
+        fecha_creacion: new Date(Date.now() - 60_000)
     };
     users.set(email, user);
     return { user, password };
+}
+
+async function createPendingDeletion({ email, role = 'usuario' }) {
+    const { user } = await createSyntheticUser({ email, role });
+    user.activo = false;
+    const request = {
+        id: nextActivityId++, usuarioId: user.id, evento: 'SOLICITUD_ELIMINACION_CUENTA',
+        descripcion: 'Synthetic pending request', ip: '192.0.2.88', fecha: new Date()
+    };
+    activity.push(request);
+    return { user, request };
 }
 
 test('registration validates fields and stores a salted PBKDF2-HMAC-SHA-256 hash', async () => {
@@ -377,7 +452,7 @@ test('login rejects an incorrect password and logs no password field', async () 
     });
     assert.equal(response.status, 401);
     assert.equal(accessAttempts.at(-1).exitoso, false);
-    assert.deepEqual(Object.keys(accessAttempts.at(-1)).sort(), ['correo', 'exitoso', 'ip']);
+    assert.deepEqual(Object.keys(accessAttempts.at(-1)).sort(), ['correo', 'exitoso', 'fecha', 'ip']);
 });
 
 test('logout records the event and destroys an authenticated session', async () => {
@@ -498,6 +573,145 @@ test('the last active administrator cannot request account deletion', async () =
     assert.equal(response.status, 409);
     assert.equal(user.activo, true);
     assert.equal(testSessions.has('last-admin-saved-session'), true);
+});
+
+test('admin can permanently delete only a pending blocked account and anonymizes linked records', async () => {
+    const { user: admin } = await createSyntheticUser({ email: 'purge-admin@example.invalid', role: 'administrador' });
+    const { user: target, request } = await createPendingDeletion({ email: 'purge-target@example.invalid' });
+    const { user: other } = await createSyntheticUser({ email: 'purge-other@example.invalid' });
+    const createdAt = target.fecha_creacion;
+    activity.push({ id: nextActivityId++, usuarioId: target.id, evento: 'SYNTHETIC_PRIVATE_EVENT', descripcion: 'possible identifying text', ip: '198.51.100.24', fecha: new Date() });
+    activity.push({ id: nextActivityId++, usuarioId: other.id, evento: 'SYNTHETIC_OTHER_EVENT', descripcion: 'keep this', ip: '198.51.100.25', fecha: new Date() });
+    testSessions.set('purge-target-session', { usuario: { id: target.id, rol: 'usuario' } });
+    testSessions.set('purge-other-session', { usuario: { id: other.id, rol: 'usuario' } });
+    accessAttempts.push(
+        { correo: target.correo, ip: '198.51.100.24', exitoso: false, fecha: new Date(createdAt.getTime() + 1) },
+        { correo: target.correo, ip: '198.51.100.23', exitoso: false, fecha: new Date(createdAt.getTime() - 1) },
+        { correo: other.correo, ip: '198.51.100.25', exitoso: false, fecha: new Date() }
+    );
+
+    const response = await post(`/api/auth/admin/account-deletion-requests/${request.id}/purge`, {}, {
+        'x-test-session': 'purge-admin-session', 'x-test-auth': 'enabled', 'x-test-user-id': String(admin.id)
+    });
+    assert.equal(response.status, 200);
+    assert.equal(users.has(target.correo), false);
+    assert.equal(users.has(other.correo), true);
+    assert.equal(users.has(admin.correo), true);
+    assert.equal(testSessions.has('purge-target-session'), false);
+    assert.equal(testSessions.has('purge-other-session'), true);
+    assert.equal(accessAttempts.some(row => row.correo === target.correo && row.fecha >= createdAt), false);
+    assert.equal(accessAttempts.some(row => row.correo === target.correo), true, 'ambiguous attempts before account creation remain');
+    assert.equal(accessAttempts.some(row => row.correo === other.correo), true);
+    const targetAudit = activity.filter(row => row.id === request.id || row.evento === 'SYNTHETIC_PRIVATE_EVENT');
+    assert.equal(targetAudit.length, 2);
+    assert.equal(targetAudit.every(row => row.usuarioId === null && row.ip === '' && row.descripcion === 'Evento de cuenta anonimizado.'), true);
+    assert.equal(activity.some(row => row.usuarioId === other.id && row.ip === '198.51.100.25'), true);
+    assert.equal(activity.at(-1).evento, 'ELIMINACION_CUENTA_COMPLETADA');
+    assert.equal(activity.at(-1).usuarioId, admin.id);
+});
+
+test('only administrators can see or execute account deletion requests', async () => {
+    const { user: normal } = await createSyntheticUser({ email: 'purge-normal@example.invalid' });
+    const { user: target, request } = await createPendingDeletion({ email: 'purge-private-target@example.invalid' });
+    const response = await post(`/api/auth/admin/account-deletion-requests/${request.id}/purge`, {}, {
+        'x-test-session': 'purge-normal-session', 'x-test-auth': 'enabled', 'x-test-user-id': String(normal.id)
+    });
+    assert.equal(response.status, 403);
+    assert.equal(users.has(target.correo), true);
+    const listResponse = await fetch(`${baseUrl}/api/auth/admin/account-deletion-requests`, {
+        headers: { 'x-test-session': 'purge-normal-list-session', 'x-test-auth': 'enabled', 'x-test-user-id': String(normal.id) }
+    });
+    assert.equal(listResponse.status, 403);
+});
+
+test('admin request list exposes only the synthetic account id, role, and request date', async () => {
+    const { user: admin } = await createSyntheticUser({ email: 'purge-list-admin@example.invalid', role: 'administrador' });
+    const { user: target } = await createPendingDeletion({ email: 'purge-list-target@example.invalid' });
+    const response = await fetch(`${baseUrl}/api/auth/admin/account-deletion-requests`, {
+        headers: { 'x-test-session': 'purge-admin-list-session', 'x-test-auth': 'enabled', 'x-test-user-id': String(admin.id) }
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    const request = result.solicitudes.find(row => row.usuario_id === target.id);
+    assert.ok(request);
+    assert.equal(request.rol, 'usuario');
+    assert.equal(Object.hasOwn(request, 'correo'), false);
+    assert.equal(Object.hasOwn(request, 'nombre'), false);
+    assert.equal(Object.hasOwn(request, 'password_hash'), false);
+});
+
+test('purge rechecks the administrator role in MySQL when a session role is stale', async () => {
+    const { user: demoted } = await createSyntheticUser({ email: 'purge-demoted-admin@example.invalid' });
+    const { user: target, request } = await createPendingDeletion({ email: 'purge-demoted-target@example.invalid' });
+    testSessions.set('purge-stale-role-session', { usuario: { id: demoted.id, rol: 'administrador' } });
+    const response = await post(`/api/auth/admin/account-deletion-requests/${request.id}/purge`, {}, {
+        'x-test-session': 'purge-stale-role-session'
+    });
+    assert.equal(response.status, 403);
+    assert.equal(users.has(target.correo), true);
+});
+
+test('purge rejects active accounts and requests that are no longer pending', async () => {
+    const { user: admin } = await createSyntheticUser({ email: 'purge-check-admin@example.invalid', role: 'administrador' });
+    const { user: active, request: forgedPending } = await createPendingDeletion({ email: 'purge-active@example.invalid' });
+    active.activo = true;
+    const activeResponse = await post(`/api/auth/admin/account-deletion-requests/${forgedPending.id}/purge`, {}, {
+        'x-test-session': 'purge-active-admin-session', 'x-test-auth': 'enabled', 'x-test-user-id': String(admin.id)
+    });
+    assert.equal(activeResponse.status, 409);
+    assert.equal(users.has(active.correo), true);
+
+    const missing = await post('/api/auth/admin/account-deletion-requests/999999/purge', {}, {
+        'x-test-session': 'purge-missing-admin-session', 'x-test-auth': 'enabled', 'x-test-user-id': String(admin.id)
+    });
+    assert.equal(missing.status, 404);
+});
+
+test('purge requires valid CSRF and a surviving active administrator', async () => {
+    const { user: admin } = await createSyntheticUser({ email: 'purge-csrf-admin@example.invalid', role: 'administrador' });
+    const { user: target, request } = await createPendingDeletion({ email: 'purge-csrf-target@example.invalid' });
+    const headers = { origin: 'http://localhost:5500', 'x-test-session': 'purge-no-csrf', 'x-test-auth': 'enabled', 'x-test-user-id': String(admin.id) };
+    const noCsrf = await postRaw(`/api/auth/admin/account-deletion-requests/${request.id}/purge`, {}, headers);
+    assert.equal(noCsrf.status, 403);
+    assert.equal(users.has(target.correo), true);
+
+    // The sole active administrator cannot be purged, even if a stale request exists.
+    const adminRequest = { id: nextActivityId++, usuarioId: admin.id, evento: 'SOLICITUD_ELIMINACION_CUENTA', fecha: new Date() };
+    activity.push(adminRequest);
+    const lastAdmin = await post(`/api/auth/admin/account-deletion-requests/${adminRequest.id}/purge`, {}, {
+        'x-test-session': 'purge-last-admin-session', 'x-test-auth': 'enabled', 'x-test-user-id': String(admin.id)
+    });
+    assert.equal(lastAdmin.status, 409);
+    assert.equal(users.has(admin.correo), true);
+});
+
+test('database error during permanent deletion rolls back sessions, attempts, and audit changes', async () => {
+    const { user: admin } = await createSyntheticUser({ email: 'purge-rollback-admin@example.invalid', role: 'administrador' });
+    const { user: target, request } = await createPendingDeletion({ email: 'purge-rollback-target@example.invalid' });
+    const audit = { id: nextActivityId++, usuarioId: target.id, evento: 'SYNTHETIC_ROLLBACK', descripcion: 'synthetic', ip: '203.0.113.20', fecha: new Date() };
+    activity.push(audit);
+    const attempt = { correo: target.correo, ip: '203.0.113.21', exitoso: false, fecha: new Date() };
+    accessAttempts.push(attempt);
+    testSessions.set('purge-rollback-target-session', { usuario: { id: target.id, rol: 'usuario' } });
+    const originalError = console.error;
+    const errors = [];
+    deletionFailureMode = 'purge-delete';
+    console.error = (...args) => errors.push(args.join(' '));
+    let response;
+    try {
+        response = await post(`/api/auth/admin/account-deletion-requests/${request.id}/purge`, {}, {
+            'x-test-session': 'purge-rollback-admin-session', 'x-test-auth': 'enabled', 'x-test-user-id': String(admin.id)
+        });
+    } finally {
+        deletionFailureMode = 'none';
+        console.error = originalError;
+    }
+    assert.equal(response.status, 500);
+    assert.equal(users.has(target.correo), true);
+    assert.equal(testSessions.has('purge-rollback-target-session'), true);
+    assert.equal(accessAttempts.some(row => row.correo === attempt.correo && row.fecha.getTime() === attempt.fecha.getTime()), true);
+    assert.equal(activity.find(row => row.id === audit.id).usuarioId, target.id);
+    assert.equal(errors.join(' ').includes(target.correo), false);
 });
 
 test('auth middleware distinguishes unauthenticated, ordinary, and admin roles', async () => {

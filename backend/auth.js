@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { hashPassword, verifyPassword } = require('./password-hash');
 const db = require('./db');
 const { rateLimit } = require('express-rate-limit');
-const { requireAuth } = require('./middleware');
+const { requireAuth, requireRole } = require('./middleware');
 
 const router = express.Router();
 
@@ -66,6 +66,14 @@ const csrfTokenLimit = rateLimit({
 const accountDeletionLimit = rateLimit({
     windowMs: 60 * 60 * 1000,
     limit: 3,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { mensaje: 'Demasiadas solicitudes. Intenta nuevamente más tarde.' }
+});
+
+const adminAccountDeletionLimit = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 10,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     message: { mensaje: 'Demasiadas solicitudes. Intenta nuevamente más tarde.' }
@@ -488,6 +496,179 @@ router.post('/delete-account', accountDeletionLimit, requireAuth, requireCsrf, a
         connection?.release();
     }
 });
+
+// Lista solicitudes pendientes sin exponer nombre, correo ni hash de la cuenta.
+router.get('/admin/account-deletion-requests', requireRole('administrador'), async (req, res) => {
+    try {
+        const [rows] = await db.execute(
+            `SELECT ra.id AS request_id, ra.usuario_id, ra.fecha, r.nombre AS rol
+             FROM registros_actividad ra
+             INNER JOIN usuarios u ON u.id = ra.usuario_id
+             INNER JOIN roles r ON r.id = u.rol_id
+             WHERE ra.evento = 'SOLICITUD_ELIMINACION_CUENTA' AND u.activo = FALSE
+             ORDER BY ra.fecha ASC, ra.id ASC`
+        );
+        res.setHeader('Cache-Control', 'no-store');
+        return res.json({ solicitudes: rows });
+    } catch (error) {
+        console.error('Could not list account deletion requests:', error.code || 'DB_ERROR');
+        return res.status(500).json({ mensaje: 'No se pudieron consultar las solicitudes.' });
+    }
+});
+
+// El borrado definitivo solo se ejecuta para una solicitud pendiente y dentro de
+// una transacción. Se conserva auditoría anonimizada y no se tocan roles/contenido.
+router.post(
+    '/admin/account-deletion-requests/:requestId/purge',
+    adminAccountDeletionLimit,
+    requireRole('administrador'),
+    requireCsrf,
+    async (req, res) => {
+        const requestId = Number(req.params.requestId);
+        if (!Number.isSafeInteger(requestId) || requestId < 1) {
+            return res.status(400).json({ mensaje: 'La solicitud indicada no es válida.' });
+        }
+
+        let connection;
+        let transactionOpen = false;
+        try {
+            connection = await db.getConnection();
+            await connection.beginTransaction();
+            transactionOpen = true;
+
+            const [requestRows] = await connection.execute(
+                `SELECT id, usuario_id
+                 FROM registros_actividad
+                 WHERE id = ? AND evento = 'SOLICITUD_ELIMINACION_CUENTA' AND usuario_id IS NOT NULL
+                 FOR UPDATE`,
+                [requestId]
+            );
+            const pendingRequest = requestRows[0];
+            if (!pendingRequest) {
+                await connection.rollback();
+                transactionOpen = false;
+                return res.status(404).json({ mensaje: 'La solicitud ya no está pendiente.' });
+            }
+
+            const targetId = Number(pendingRequest.usuario_id);
+            const [targetRows] = await connection.execute(
+                `SELECT u.id, u.correo, u.activo, u.fecha_creacion, r.nombre AS rol
+                 FROM usuarios u
+                 INNER JOIN roles r ON r.id = u.rol_id
+                 WHERE u.id = ?
+                 FOR UPDATE`,
+                [targetId]
+            );
+            const target = targetRows[0];
+            if (!target || target.activo === true || Number(target.activo) === 1) {
+                await connection.rollback();
+                transactionOpen = false;
+                return res.status(409).json({ mensaje: 'Solo se pueden eliminar cuentas bloqueadas con solicitud pendiente.' });
+            }
+
+            // Revalida al administrador en MySQL dentro de la transacción. No se
+            // confía únicamente en el rol que quedó serializado en la sesión.
+            const [actorRows] = await connection.execute(
+                `SELECT u.id
+                 FROM usuarios u
+                 INNER JOIN roles r ON r.id = u.rol_id
+                 WHERE u.id = ? AND u.activo = TRUE AND r.nombre = 'administrador'
+                 FOR UPDATE`,
+                [req.session.usuario.id]
+            );
+            if (actorRows.length !== 1) {
+                await connection.rollback();
+                transactionOpen = false;
+                return res.status(403).json({ mensaje: 'La sesión ya no tiene permisos administrativos.' });
+            }
+
+            const [activeAdminRows] = await connection.execute(
+                `SELECT u.id
+                 FROM usuarios u
+                 INNER JOIN roles r ON r.id = u.rol_id
+                 WHERE r.nombre = 'administrador' AND u.activo = TRUE
+                 ORDER BY u.id
+                 FOR UPDATE`
+            );
+            if (activeAdminRows.length < 1) {
+                await connection.rollback();
+                transactionOpen = false;
+                return res.status(409).json({ mensaje: 'No se puede completar el borrado sin conservar un administrador activo.' });
+            }
+
+            const [sessionRows] = await connection.execute('SELECT session_id, data FROM sesiones FOR UPDATE');
+            const matchingSessionIds = [];
+            for (const row of sessionRows) {
+                let data = row.data;
+                if (Buffer.isBuffer(data)) data = data.toString('utf8');
+                if (typeof data === 'string') {
+                    try { data = JSON.parse(data); } catch {
+                        const error = new Error('Unparseable session data');
+                        error.code = 'SESSION_DATA_UNREADABLE';
+                        throw error;
+                    }
+                }
+                if (!data || typeof data !== 'object' || Array.isArray(data)) {
+                    const error = new Error('Invalid session data');
+                    error.code = 'SESSION_DATA_UNREADABLE';
+                    throw error;
+                }
+                if (data.usuario && String(data.usuario.id) === String(targetId)) {
+                    matchingSessionIds.push(row.session_id);
+                }
+            }
+            for (const sessionId of matchingSessionIds) {
+                await connection.execute('DELETE FROM sesiones WHERE session_id = ?', [sessionId]);
+            }
+
+            // intentos_acceso no tiene usuario_id. Solo se borran filas ligadas
+            // al correo de esta cuenta desde su fecha de creación; previas son ambiguas.
+            await connection.execute(
+                'DELETE FROM intentos_acceso WHERE correo = ? AND fecha >= ?',
+                [target.correo, target.fecha_creacion]
+            );
+
+            // Conserva evento y fecha por auditoría, pero elimina vínculo, IP y
+            // cualquier descripción histórica que pudiera contener datos personales.
+            await connection.execute(
+                `UPDATE registros_actividad
+                 SET usuario_id = NULL, direccion_ip = '', descripcion = 'Evento de cuenta anonimizado.'
+                 WHERE usuario_id = ?`,
+                [targetId]
+            );
+
+            const [deleteResult] = await connection.execute(
+                'DELETE FROM usuarios WHERE id = ? AND activo = FALSE',
+                [targetId]
+            );
+            if (deleteResult.affectedRows !== 1) {
+                const error = new Error('Account purge did not delete one inactive account');
+                error.code = 'ACCOUNT_PURGE_FAILED';
+                throw error;
+            }
+
+            await connection.execute(
+                `INSERT INTO registros_actividad (usuario_id, evento, descripcion, direccion_ip)
+                 VALUES (?, 'ELIMINACION_CUENTA_COMPLETADA', ?, '')`,
+                [req.session.usuario.id, `Solicitud ${requestId} completada; cuenta anonimizada.`]
+            );
+
+            await connection.commit();
+            transactionOpen = false;
+            return res.json({ mensaje: 'La cuenta se eliminó y sus registros de auditoría se anonimizaron.' });
+        } catch (error) {
+            if (transactionOpen) {
+                try { await connection.rollback(); } catch (rollbackError) {
+                    console.error('Account purge rollback failed:', rollbackError.code || 'DB_ERROR');
+                }
+            }
+            console.error('Account purge failed:', error.code || 'DB_ERROR');
+            return res.status(500).json({ mensaje: 'No se pudo completar el borrado. No se confirmó ningún cambio.' });
+        } finally {
+            connection?.release();
+        }
+    }
+);
 
 // Cerrar sesión.
 router.post('/logout', requireCsrf, async (req, res) => {

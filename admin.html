@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="styles.css">
     <script src="panel.js" defer></script>
     <script src="admin-content.js" defer></script>
+    <script src="admin-deletions.js" defer></script>
   </head>
   <body class="admin-page panel-page">
     <main class="admin-shell" data-required-role="administrador" hidden>
@@ -71,6 +72,13 @@
           <p class="content-message" id="content-message" role="status" aria-live="polite"></p>
           <div class="content-table-wrap"><table class="content-table"><thead id="content-head"></thead><tbody id="content-rows"></tbody></table></div>
           <p class="admin-data-note">Los cambios se guardan con tu sesión administrativa y las protecciones actuales del sistema.</p>
+        </section>
+
+        <section class="admin-content-work admin-deletion-requests" aria-labelledby="deletion-requests-title">
+          <div class="admin-work-heading"><div><p class="eyebrow"><span></span> Privacidad de cuentas</p><h2 id="deletion-requests-title">Solicitudes de <em>eliminación</em></h2></div><button class="button content-cancel" id="refresh-deletion-requests" type="button">Actualizar</button></div>
+          <p class="content-message" id="deletion-requests-message" role="status" aria-live="polite">Cargando solicitudes pendientes…</p>
+          <div class="content-table-wrap"><table class="content-table"><thead><tr><th>Folio</th><th>Cuenta</th><th>Rol</th><th>Fecha de solicitud</th><th>Acción</th></tr></thead><tbody id="deletion-request-rows"></tbody></table></div>
+          <p class="admin-data-note">La eliminación es definitiva. Se conservan eventos de auditoría anonimizados; no se muestran datos personales en esta lista.</p>
         </section>
 
         <p class="panel-status" id="panel-status" role="status" aria-live="polite"></p>
