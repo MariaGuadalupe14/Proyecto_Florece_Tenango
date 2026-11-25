@@ -33,6 +33,7 @@
         <a href="#comercios">Comercios</a>
         <a href="#capacitacion">Capacitación</a>
         <a class="nav-login nav-session-control" id="nav-login" href="#acceso">Iniciar sesión <span aria-hidden="true">↗</span></a>
+        <a class="nav-session-control" id="nav-account" href="#acceso" hidden>Mi cuenta</a>
         <span class="nav-greeting" id="nav-greeting" hidden></span>
         <button class="nav-login nav-session-control" id="nav-logout" type="button" hidden>Cerrar sesión <span aria-hidden="true">↗</span></button>
       </nav>
@@ -166,6 +167,16 @@
             <p class="login-status" id="register-status" role="status" aria-live="polite"></p>
             <p class="auth-switch">&iquest;Ya tienes una cuenta? <button type="button" class="auth-switch-link" id="show-login">Regresa a iniciar sesi&oacute;n</button></p>
           </form>
+          <section class="account-deletion" id="account-deletion" hidden aria-labelledby="account-deletion-title">
+            <h3 id="account-deletion-title">Solicitar eliminación de cuenta</h3>
+            <p>La solicitud bloqueará tu cuenta y cerrará sus sesiones. Esta etapa no elimina físicamente tus datos ni el historial que deba conservarse.</p>
+            <form class="auth-form" id="delete-account-form" novalidate>
+              <label for="delete-account-password">Confirma tu contraseña actual</label>
+              <div class="password-field"><input id="delete-account-password" name="password" type="password" autocomplete="current-password" required maxlength="128"><button type="button" class="password-toggle" data-password-toggle="delete-account-password" aria-label="Mostrar contraseña" aria-pressed="false">Mostrar</button></div>
+              <button class="login-submit" type="submit">Bloquear mi cuenta y solicitar eliminación</button>
+              <p class="login-status" id="delete-account-status" role="status" aria-live="polite"></p>
+            </form>
+          </section>
         </div>
       </div></section>
       <section class="training-section" id="capacitacion" aria-labelledby="training-title">

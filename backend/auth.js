@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { hashPassword, verifyPassword } = require('./password-hash');
 const db = require('./db');
 const { rateLimit } = require('express-rate-limit');
+const { requireAuth } = require('./middleware');
 
 const router = express.Router();
 
@@ -60,6 +61,14 @@ const csrfTokenLimit = rateLimit({
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     message: { mensaje: 'Demasiadas solicitudes. Intenta nuevamente.' }
+});
+
+const accountDeletionLimit = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 3,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { mensaje: 'Demasiadas solicitudes. Intenta nuevamente más tarde.' }
 });
 
 function isTrustedBrowserOrigin(origin = '') {
@@ -259,6 +268,23 @@ router.post('/login', loginLimit, requireCsrf, async (req, res) => {
         }
 
         // Crear una sesión nueva
+        const loginConnection = await db.getConnection();
+        let loginTransactionOpen = false;
+        let newSessionSaved = false;
+        try {
+            await loginConnection.beginTransaction();
+            loginTransactionOpen = true;
+            const [activeAccounts] = await loginConnection.execute(
+                'SELECT id FROM usuarios WHERE id = ? AND activo = TRUE FOR UPDATE',
+                [usuario.id]
+            );
+            if (activeAccounts.length !== 1) {
+                await loginConnection.rollback();
+                loginTransactionOpen = false;
+                await registrarIntento(correoLimpio, ip, false);
+                return res.status(401).json({ mensaje: 'Correo o contraseña incorrectos.' });
+            }
+
         await new Promise((resolve, reject) => {
             req.session.regenerate(error => {
                 if (error) reject(error);
@@ -282,6 +308,26 @@ router.post('/login', loginLimit, requireCsrf, async (req, res) => {
                 else resolve();
             });
         });
+        newSessionSaved = true;
+        await loginConnection.commit();
+        loginTransactionOpen = false;
+        } catch (error) {
+            if (loginTransactionOpen) {
+                try { await loginConnection.rollback(); } catch (rollbackError) {
+                    console.error('Login rollback failed:', rollbackError.code || 'DB_ERROR');
+                }
+            }
+            if (newSessionSaved || req.session.usuario?.id === usuario.id) {
+                try {
+                    await new Promise((resolve, reject) => req.session.destroy(err => err ? reject(err) : resolve()));
+                } catch (destroyError) {
+                    console.error('Could not discard an uncommitted login session:', destroyError.code || 'DB_ERROR');
+                }
+            }
+            throw error;
+        } finally {
+            loginConnection.release();
+        }
 
         // Registrar el acceso exitoso
         await registrarIntento(correoLimpio, ip, true);
@@ -309,7 +355,7 @@ router.post('/login', loginLimit, requireCsrf, async (req, res) => {
 });
 
 // CONSULTAR SESIÓN ACTUAL
-router.get('/me', (req, res) => {
+router.get('/me', requireAuth, (req, res) => {
     if (!req.session.usuario) {
         return res.status(401).json({
             mensaje: 'No has iniciado sesión.'
@@ -321,7 +367,129 @@ router.get('/me', (req, res) => {
     });
 });
 
-// CERRAR SESIÓN
+// Solicitud de eliminación de cuenta (bloqueo reversible; no elimina datos físicamente).
+router.post('/delete-account', accountDeletionLimit, requireAuth, requireCsrf, async (req, res) => {
+    const password = req.body?.password;
+    if (typeof password !== 'string' || password.length < 1 || password.length > 128) {
+        return res.status(400).json({ mensaje: 'Confirma la contraseña actual para continuar.' });
+    }
+
+    const userId = req.session.usuario.id;
+    const ip = req.ip;
+    let connection;
+    let transactionOpen = false;
+
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+        transactionOpen = true;
+
+        const [accountRows] = await connection.execute(
+            `SELECT u.id, u.password_hash, u.activo, r.nombre AS rol
+             FROM usuarios u
+             INNER JOIN roles r ON r.id = u.rol_id
+             WHERE u.id = ?
+             FOR UPDATE`,
+            [userId]
+        );
+        const account = accountRows[0];
+        if (!account || !account.activo) {
+            await connection.rollback();
+            transactionOpen = false;
+            return res.status(401).json({ mensaje: 'No se pudo verificar la cuenta.' });
+        }
+
+        const verification = await verifyPassword(password, account.password_hash);
+        if (!verification.valid) {
+            await connection.rollback();
+            transactionOpen = false;
+            return res.status(401).json({ mensaje: 'La contraseña actual no es correcta.' });
+        }
+
+        if (account.rol === 'administrador') {
+            const [admins] = await connection.execute(
+                `SELECT u.id
+                 FROM usuarios u
+                 INNER JOIN roles r ON r.id = u.rol_id
+                 WHERE r.nombre = 'administrador' AND u.activo = TRUE
+                 ORDER BY u.id
+                 FOR UPDATE`
+            );
+            if (admins.length <= 1) {
+                await connection.rollback();
+                transactionOpen = false;
+                return res.status(409).json({ mensaje: 'No se puede bloquear la última cuenta administradora activa.' });
+            }
+        }
+
+        // Read only session metadata. Fail closed if a row cannot be parsed.
+        const [sessionRows] = await connection.execute('SELECT session_id, data FROM sesiones');
+        const matchingSessionIds = [];
+        for (const row of sessionRows) {
+            let data = row.data;
+            if (typeof data === 'string') {
+                try { data = JSON.parse(data); } catch {
+                    const error = new Error('Unparseable session data');
+                    error.code = 'SESSION_DATA_UNREADABLE';
+                    throw error;
+                }
+            }
+            if (!data || typeof data !== 'object' || Array.isArray(data)) {
+                const error = new Error('Invalid session data');
+                error.code = 'SESSION_DATA_UNREADABLE';
+                throw error;
+            }
+            if (data.usuario && String(data.usuario.id) === String(userId)) {
+                matchingSessionIds.push(row.session_id);
+            }
+        }
+
+        const [blockResult] = await connection.execute(
+            'UPDATE usuarios SET activo = FALSE WHERE id = ? AND activo = TRUE',
+            [userId]
+        );
+        if (blockResult.affectedRows !== 1) {
+            const error = new Error('Account block did not update one row');
+            error.code = 'ACCOUNT_BLOCK_FAILED';
+            throw error;
+        }
+
+        for (const sessionId of matchingSessionIds) {
+            await connection.execute('DELETE FROM sesiones WHERE session_id = ?', [sessionId]);
+        }
+
+        await connection.execute(
+            `INSERT INTO registros_actividad (usuario_id, evento, descripcion, direccion_ip)
+             VALUES (?, ?, ?, ?)`,
+            [userId, 'SOLICITUD_ELIMINACION_CUENTA', 'La cuenta fue bloqueada por solicitud de eliminación.', ip]
+        );
+
+        await connection.commit();
+        transactionOpen = false;
+        req.session = null;
+        res.clearCookie('florece.sid', {
+            path: '/',
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production' || process.env.SESSION_COOKIE_SECURE === 'true',
+            sameSite: 'lax'
+        });
+        return res.json({
+            mensaje: 'La solicitud fue registrada. La cuenta quedó bloqueada y sus sesiones fueron invalidadas; los datos aún no se han eliminado físicamente.'
+        });
+    } catch (error) {
+        if (transactionOpen) {
+            try { await connection.rollback(); } catch (rollbackError) {
+                console.error('Account deletion rollback failed:', rollbackError.code || 'DB_ERROR');
+            }
+        }
+        console.error('Account deletion request failed:', error.code || 'DB_ERROR');
+        return res.status(500).json({ mensaje: 'No se pudo completar la solicitud. La cuenta no se confirmó como bloqueada.' });
+    } finally {
+        connection?.release();
+    }
+});
+
+// Cerrar sesión.
 router.post('/logout', requireCsrf, async (req, res) => {
     try {
         const usuario = req.session.usuario;

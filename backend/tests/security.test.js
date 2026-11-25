@@ -4,7 +4,7 @@ const Module = require('node:module');
 const express = require('express');
 const argon2 = require('argon2');
 const { once } = require('node:events');
-const { verifyPassword, PBKDF2_SCHEME, PBKDF2_ITERATIONS } = require('../password-hash');
+const { hashPassword, verifyPassword, PBKDF2_SCHEME, PBKDF2_ITERATIONS } = require('../password-hash');
 
 const users = new Map();
 const accessAttempts = [];
@@ -14,7 +14,46 @@ const testSessions = new Map();
 let rejectNextUserInsert = false;
 let migrationUpdateMode = 'normal';
 let testIpCounter = 1;
+let nextUserId = 1;
+let nextSyntheticUserId = 20000;
+let deletionFailureMode = 'none';
 const fakeDb = {
+    async getConnection() {
+        let snapshot;
+        return {
+            async beginTransaction() {
+                snapshot = {
+                    users: new Map([...users].map(([email, user]) => [email, { ...user }])),
+                    sessions: new Map(testSessions),
+                    activity: activity.slice()
+                };
+            },
+            async execute(sql, params = []) {
+                if (deletionFailureMode === 'session-delete' && sql.includes('DELETE FROM sesiones')) {
+                    const error = new Error('Synthetic session delete failure');
+                    error.code = 'ER_SYNTHETIC_DELETE';
+                    throw error;
+                }
+                if (deletionFailureMode === 'activity-insert' && sql.includes('INSERT INTO registros_actividad')) {
+                    const error = new Error('Synthetic audit insert failure');
+                    error.code = 'ER_SYNTHETIC_AUDIT';
+                    throw error;
+                }
+                return fakeDb.execute(sql, params);
+            },
+            async commit() { snapshot = null; },
+            async rollback() {
+                if (!snapshot) return;
+                users.clear();
+                for (const [email, user] of snapshot.users) users.set(email, user);
+                testSessions.clear();
+                for (const [id, session] of snapshot.sessions) testSessions.set(id, session);
+                activity.splice(0, activity.length, ...snapshot.activity);
+                snapshot = null;
+            },
+            release() {}
+        };
+    },
     async execute(sql, params = []) {
         if (sql.includes('SELECT id FROM usuarios WHERE correo = ?')) {
             const user = users.get(params[0]);
@@ -28,8 +67,37 @@ const fakeDb = {
                 throw error;
             }
             const [nombre, correo, password_hash] = params;
-            users.set(correo, { id: users.size + 1, nombre, correo, password_hash, rol: 'usuario' });
+            users.set(correo, { id: nextUserId++, nombre, correo, password_hash, rol: 'usuario', activo: true });
             return [{ affectedRows: 1 }, []];
+        }
+        if (sql.includes('SELECT id FROM usuarios WHERE id = ? AND activo = TRUE')) {
+            const user = [...users.values()].find(candidate => candidate.id === Number(params[0]));
+            return [user && user.activo !== false ? [{ id: user.id }] : [], []];
+        }
+        if (sql.includes('SELECT u.id, u.password_hash, u.activo, r.nombre AS rol')) {
+            const user = [...users.values()].find(candidate => candidate.id === Number(params[0]));
+            return [user ? [{ id: user.id, password_hash: user.password_hash, activo: user.activo !== false, rol: user.rol }] : [], []];
+        }
+        if (sql.includes('SELECT u.id') && sql.includes('FROM usuarios u') && sql.includes("r.nombre = 'administrador'")) {
+            return [[...users.values()]
+                .filter(user => user.rol === 'administrador' && user.activo !== false)
+                .sort((a, b) => a.id - b.id)
+                .map(user => ({ id: user.id })), []];
+        }
+        if (sql.includes('SELECT session_id, data FROM sesiones')) {
+            return [[...testSessions.entries()].map(([session_id, data]) => ({
+                session_id,
+                data: JSON.stringify(data)
+            })), []];
+        }
+        if (sql.includes('UPDATE usuarios SET activo = FALSE WHERE id = ? AND activo = TRUE')) {
+            const user = [...users.values()].find(candidate => candidate.id === Number(params[0]));
+            if (!user || user.activo === false) return [{ affectedRows: 0 }, []];
+            user.activo = false;
+            return [{ affectedRows: 1 }, []];
+        }
+        if (sql.includes('DELETE FROM sesiones WHERE session_id = ?')) {
+            return [{ affectedRows: testSessions.delete(params[0]) ? 1 : 0 }, []];
         }
         if (sql.includes('UPDATE usuarios SET password_hash = ? WHERE id = ? AND password_hash = ?')) {
             const [password_hash, id, oldHash] = params;
@@ -46,7 +114,7 @@ const fakeDb = {
         }
         if (sql.includes('SELECT u.id, u.nombre, u.correo, u.password_hash')) {
             const user = users.get(params[0]);
-            return [user ? [{ ...user, activo: true }] : [], []];
+            return [user && user.activo !== false ? [{ ...user, activo: true }] : [], []];
         }
         if (sql.includes('INSERT INTO intentos_acceso')) {
             accessAttempts.push({ correo: params[0], ip: params[1], exitoso: params[2] });
@@ -87,13 +155,18 @@ app.use((req, res, next) => {
         state = {
             usuario: undefined,
             regenerate(callback) { this.regenerated = true; this.usuario = undefined; delete this.csrfToken; callback(); },
-            save(callback) { this.saved = true; callback(); },
-            destroy(callback) { this.destroyed = true; this.usuario = undefined; delete this.csrfToken; callback(); }
+            save(callback) { this.saved = true; testSessions.set(sessionId, this); callback(); },
+            destroy(callback) { this.destroyed = true; testSessions.delete(sessionId); this.usuario = undefined; delete this.csrfToken; callback(); }
         };
         testSessions.set(sessionId, state);
     }
     if (req.get('x-test-auth') === 'enabled') {
-        state.usuario = { id: 1, nombre: 'Test User', correo: 'test@example.invalid', rol: 'usuario' };
+        const userId = Number(req.get('x-test-user-id') || 1);
+        const user = [...users.values()].find(candidate => candidate.id === userId);
+        state.usuario = user
+            ? { id: user.id, nombre: user.nombre, correo: user.correo, rol: user.rol }
+            : { id: userId, nombre: 'Synthetic User', correo: 'synthetic@example.invalid', rol: req.get('x-test-role') || 'usuario' };
+        testSessions.set(sessionId, state);
     }
     sessionStates.push(state);
     req.session = state;
@@ -101,6 +174,8 @@ app.use((req, res, next) => {
 });
 app.use('/api/auth', authRoutes);
 app.use('/api/limits', freshLimitRoutes);
+app.get('/api/test-protected', requireAuth, (req, res) => res.json({ ok: true }));
+app.get('/api/test-admin', requireRole('administrador'), (req, res) => res.json({ ok: true }));
 
 let server;
 let baseUrl;
@@ -142,6 +217,19 @@ async function post(path, body, extraHeaders = {}) {
         'x-csrf-token': csrf.csrfToken,
         ...extraHeaders
     });
+}
+
+async function createSyntheticUser({ email, role = 'usuario', password = 'Synthetic-account-test-Password-2026!' }) {
+    const user = {
+        id: nextSyntheticUserId++,
+        nombre: 'Synthetic Test Account',
+        correo: email,
+        password_hash: await hashPassword(password),
+        rol: role,
+        activo: true
+    };
+    users.set(email, user);
+    return { user, password };
 }
 
 test('registration validates fields and stores a salted PBKDF2-HMAC-SHA-256 hash', async () => {
@@ -299,16 +387,130 @@ test('logout records the event and destroys an authenticated session', async () 
     assert.equal(sessionStates.at(-1).destroyed, true);
 });
 
-test('auth middleware distinguishes unauthenticated, ordinary, and admin roles', () => {
-    const run = (middleware, req) => {
+test('account deletion requires an authenticated user and a valid CSRF token', async () => {
+    const { user, password } = await createSyntheticUser({ email: 'delete-auth@example.invalid' });
+    const unauthenticated = await post('/api/auth/delete-account', { password }, { 'x-test-session': 'delete-anon', 'x-test-ip': '192.0.2.31' });
+    assert.equal(unauthenticated.status, 401);
+
+    const noToken = await postRaw('/api/auth/delete-account', { password }, {
+        'x-test-session': 'delete-no-csrf', 'x-test-auth': 'enabled', 'x-test-user-id': String(user.id), 'x-test-ip': '192.0.2.32'
+    });
+    assert.equal(noToken.status, 403);
+
+    const csrfHeaders = { 'x-test-session': 'delete-bad-csrf', 'x-test-auth': 'enabled', 'x-test-user-id': String(user.id) };
+    const csrf = await csrfFor('/api/auth/delete-account', 'delete-bad-csrf', csrfHeaders);
+    const invalid = await postRaw('/api/auth/delete-account', { password }, {
+        ...csrfHeaders, 'x-test-ip': '192.0.2.33', 'x-csrf-token': `${csrf.csrfToken}invalid`
+    });
+    assert.equal(invalid.status, 403);
+    assert.equal(users.get(user.correo).activo, true);
+});
+
+test('incorrect current password leaves the account and all of its sessions intact', async () => {
+    const { user } = await createSyntheticUser({ email: 'delete-wrong-password@example.invalid' });
+    testSessions.set('delete-wrong-saved-session', { usuario: { id: user.id, rol: user.rol } });
+    const response = await post('/api/auth/delete-account', { password: 'Synthetic-wrong-password-2026!' }, {
+        'x-test-session': 'delete-wrong-current', 'x-test-auth': 'enabled', 'x-test-user-id': String(user.id), 'x-test-ip': '192.0.2.34'
+    });
+    assert.equal(response.status, 401);
+    assert.equal(user.activo, true);
+    assert.equal(testSessions.has('delete-wrong-saved-session'), true);
+});
+
+test('account deletion revokes only that account sessions and blocks future login', async () => {
+    const { user, password } = await createSyntheticUser({ email: 'delete-target@example.invalid' });
+    const { user: otherUser } = await createSyntheticUser({ email: 'delete-other@example.invalid' });
+    const originalHash = user.password_hash;
+    const previousAudit = { usuarioId: user.id, evento: 'SYNTHETIC_PREVIOUS_ACTIVITY' };
+    activity.push(previousAudit);
+    testSessions.set('delete-target-session-one', { usuario: { id: user.id, rol: user.rol }, csrfToken: 'synthetic-one' });
+    testSessions.set('delete-target-session-two', { usuario: { id: user.id, rol: user.rol }, csrfToken: 'synthetic-two' });
+    testSessions.set('delete-other-session', { usuario: { id: otherUser.id, rol: otherUser.rol } });
+
+    const response = await post('/api/auth/delete-account', { password, userId: otherUser.id }, {
+        'x-test-session': 'delete-target-current', 'x-test-auth': 'enabled', 'x-test-user-id': String(user.id), 'x-test-ip': '192.0.2.35'
+    });
+    assert.equal(response.status, 200);
+    assert.equal(user.activo, false);
+    assert.equal(users.has(user.correo), true);
+    assert.equal(users.get(user.correo).password_hash, originalHash);
+    assert.equal(testSessions.has('delete-target-session-one'), false);
+    assert.equal(testSessions.has('delete-target-session-two'), false);
+    assert.equal(testSessions.has('delete-target-current'), false);
+    assert.equal(testSessions.has('delete-other-session'), true);
+    assert.equal(otherUser.activo, true);
+    assert.equal(activity.includes(previousAudit), true);
+    assert.equal(activity.at(-1).evento, 'SOLICITUD_ELIMINACION_CUENTA');
+    assert.equal(activity.at(-1).usuarioId, user.id);
+
+    const login = await post('/api/auth/login', { correo: user.correo, password }, { 'x-test-session': 'blocked-login' });
+    assert.equal(login.status, 401);
+    assert.equal(sessionStates.at(-1).saved, undefined);
+});
+
+test('requireAuth rejects and destroys an existing session for a blocked account', async () => {
+    const { user } = await createSyntheticUser({ email: 'blocked-middleware@example.invalid' });
+    user.activo = false;
+    testSessions.set('blocked-existing-session', {
+        usuario: { id: user.id, rol: user.rol },
+        destroy(callback) { testSessions.delete('blocked-existing-session'); callback(); }
+    });
+    const response = await fetch(baseUrl + '/api/test-protected', {
+        headers: { 'x-test-session': 'blocked-existing-session', 'x-test-auth': 'enabled', 'x-test-user-id': String(user.id) }
+    });
+    assert.equal(response.status, 401);
+    assert.equal(testSessions.has('blocked-existing-session'), false);
+});
+
+test('MySQL errors roll back account blocking and do not report success', async () => {
+    const { user, password } = await createSyntheticUser({ email: 'delete-db-error@example.invalid' });
+    testSessions.set('delete-db-error-saved', { usuario: { id: user.id, rol: user.rol } });
+    const errors = [];
+    const originalError = console.error;
+    deletionFailureMode = 'session-delete';
+    console.error = (...args) => errors.push(args.join(' '));
+    let response;
+    try {
+        response = await post('/api/auth/delete-account', { password }, {
+            'x-test-session': 'delete-db-error-current', 'x-test-auth': 'enabled', 'x-test-user-id': String(user.id), 'x-test-ip': '192.0.2.36'
+        });
+    } finally {
+        deletionFailureMode = 'none';
+        console.error = originalError;
+    }
+    assert.equal(response.status, 500);
+    assert.equal(users.get(user.correo).activo, true);
+    assert.equal(testSessions.has('delete-db-error-saved'), true);
+    assert.equal((await response.json()).mensaje.includes('Solicitud fue registrada'), false);
+    assert.equal(errors.join(' ').includes(password), false);
+    assert.equal(errors.join(' ').includes(user.correo), false);
+});
+
+test('the last active administrator cannot request account deletion', async () => {
+    for (const account of users.values()) {
+        if (account.rol === 'administrador') account.activo = false;
+    }
+    const { user, password } = await createSyntheticUser({ email: 'last-admin@example.invalid', role: 'administrador' });
+    testSessions.set('last-admin-saved-session', { usuario: { id: user.id, rol: user.rol } });
+    const response = await post('/api/auth/delete-account', { password }, {
+        'x-test-session': 'last-admin-current', 'x-test-auth': 'enabled', 'x-test-user-id': String(user.id), 'x-test-role': 'administrador', 'x-test-ip': '192.0.2.37'
+    });
+    assert.equal(response.status, 409);
+    assert.equal(user.activo, true);
+    assert.equal(testSessions.has('last-admin-saved-session'), true);
+});
+
+test('auth middleware distinguishes unauthenticated, ordinary, and admin roles', async () => {
+    const run = async (middleware, req) => {
         let status;
         let advanced = false;
-        middleware(req, { status(value) { status = value; return this; }, json() {} }, () => { advanced = true; });
+        await middleware(req, { status(value) { status = value; return this; }, json() {} }, () => { advanced = true; });
         return { status, advanced };
     };
-    assert.equal(run(requireAuth, {}).status, 401);
-    assert.equal(run(requireRole('administrador'), { session: { usuario: { rol: 'usuario' } } }).status, 403);
-    assert.equal(run(requireRole('administrador'), { session: { usuario: { rol: 'administrador' } } }).advanced, true);
+    assert.equal((await run(requireAuth, {})).status, 401);
+    assert.equal((await run(requireRole('administrador'), { session: { usuario: { rol: 'usuario' } } })).status, 403);
+    const activeUser = [...users.values()].find(user => user.activo !== false);
+    assert.equal((await run(requireRole('usuario'), { session: { usuario: { id: activeUser.id, rol: 'usuario' } } })).advanced, true);
 });
 
 test('login and registration limits reject the sixth request in the configured window', async () => {

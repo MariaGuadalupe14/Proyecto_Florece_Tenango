@@ -30,13 +30,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const publicView = new URLSearchParams(window.location.search).get('public') === '1';
   const userHome = window.location.pathname.endsWith('/usuario.html');
   const navLogin = document.querySelector('#nav-login');
+  const navAccount = document.querySelector('#nav-account');
   const navLogout = document.querySelector('#nav-logout');
   const navGreeting = document.querySelector('#nav-greeting');
+  const accountDeletionPanel = document.querySelector('#account-deletion');
 
   function updateSessionNavigation(user) {
     const authenticated = Boolean(user && user.rol);
     if (navLogin) navLogin.hidden = authenticated;
+    if (navAccount) navAccount.hidden = !authenticated;
     if (navLogout) navLogout.hidden = !authenticated;
+    const loginFormElement = document.querySelector('#login-form');
+    const registerFormElement = document.querySelector('#register-form');
+    if (loginFormElement) loginFormElement.hidden = authenticated;
+    if (registerFormElement) registerFormElement.hidden = true;
+    if (accountDeletionPanel) accountDeletionPanel.hidden = !authenticated;
     if (navGreeting) {
       navGreeting.hidden = !authenticated;
       navGreeting.textContent = authenticated ? `Hola, ${(user.nombre || 'usuario').trim().split(/\s+/)[0]}` : '';
@@ -121,6 +129,31 @@ document.addEventListener('DOMContentLoaded', () => {
       loginStatus.textContent = error.message || 'No se pudo cerrar la sesión.';
     } finally {
       navLogout.disabled = false;
+    }
+  });
+
+  const deleteAccountForm = document.querySelector('#delete-account-form');
+  const deleteAccountStatus = document.querySelector('#delete-account-status');
+  deleteAccountForm?.addEventListener('submit', async event => {
+    event.preventDefault();
+    deleteAccountStatus.textContent = '';
+    const password = document.querySelector('#delete-account-password');
+    if (!password.reportValidity()) return;
+    if (!window.confirm('La solicitud bloqueará tu cuenta y cerrará sus sesiones. ¿Deseas continuar?')) return;
+
+    const button = deleteAccountForm.querySelector('[type="submit"]');
+    button.disabled = true;
+    try {
+      const result = await sendAuthRequest('delete-account', { password: password.value });
+      if (!result.response.ok) throw new Error(result.body.mensaje || 'No se pudo solicitar la eliminación.');
+      deleteAccountForm.reset();
+      updateSessionNavigation(null);
+      loginStatus.textContent = result.body.mensaje;
+      if (userHome) window.location.replace('/index.html?public=1#acceso');
+    } catch (error) {
+      deleteAccountStatus.textContent = error.message || 'No se pudo solicitar la eliminación.';
+    } finally {
+      button.disabled = false;
     }
   });
 

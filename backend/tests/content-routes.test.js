@@ -4,7 +4,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const express = require('express');
 const { createContentRouter } = require('../content-routes');
-const { requireRole } = require('../middleware');
+
+function requireRole(requiredRole) {
+    return (req, res, next) => {
+        if (!req.session || !req.session.usuario) return res.status(401).json({ mensaje: 'Unauthenticated test session.' });
+        if (req.session.usuario.rol !== requiredRole) return res.status(403).json({ mensaje: 'Wrong test role.' });
+        return next();
+    };
+}
 
 const csrfToken = 'synthetic-csrf-token-for-content-tests';
 
