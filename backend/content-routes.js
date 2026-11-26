@@ -188,8 +188,12 @@ function createContentRouter({ db, requireRole }) {
             if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ mensaje: 'Identificador no válido.' });
             const validationError = validatePayload(type, req.body);
             if (validationError) return res.status(400).json({ mensaje: validationError });
-            const assignments = columns.map(column => `${column} = ?`);
-            const values = columns.map(column => req.body[column] === undefined ? null :
+            // Sitio web es opcional: si el formulario lo omite, conserva el valor existente.
+            const updateColumns = type === 'comercios' && req.body.sitio_web === undefined
+                ? columns.filter(column => column !== 'sitio_web')
+                : columns;
+            const assignments = updateColumns.map(column => `${column} = ?`);
+            const values = updateColumns.map(column => req.body[column] === undefined ? null :
                 (typeof req.body[column] === 'string' ? req.body[column].trim() : Number(req.body[column])));
             assignments.push('estado = ?');
             values.push(req.body.estado || 'borrador');

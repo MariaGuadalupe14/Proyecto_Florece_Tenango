@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
     deleteAccountStatus.textContent = '';
     const password = document.querySelector('#delete-account-password');
     if (!password.reportValidity()) return;
-    if (!window.confirm('La solicitud bloqueará tu cuenta y cerrará sus sesiones. ¿Deseas continuar?')) return;
+    if (!window.confirm('¿Quieres solicitar la eliminación de tu cuenta? Confirma para continuar.')) return;
 
     const button = deleteAccountForm.querySelector('[type="submit"]');
     button.disabled = true;
@@ -174,11 +174,9 @@ document.addEventListener('DOMContentLoaded', () => {
       updateSessionNavigation(user);
       redirectForRole(user.rol);
     } catch (error) {
-      loginStatus.textContent = error.message === 'local-backend-only'
-        ? 'El backend solo est\u00e1 disponible localmente. Abre esta p\u00e1gina desde localhost para iniciar sesi\u00f3n.'
-        : error instanceof TypeError
-          ? 'No se pudo conectar con el backend local. Comprueba que est\u00e9 ejecut\u00e1ndose en localhost:3000.'
-          : error.message;
+      loginStatus.textContent = error instanceof TypeError
+        ? 'No fue posible conectar en este momento. Intenta nuevamente más tarde.'
+        : error.message;
     } finally { button.disabled = false; }
   });
 
@@ -209,11 +207,9 @@ document.addEventListener('DOMContentLoaded', () => {
       setFormMode(false);
       loginStatus.textContent = result.body.mensaje || 'Cuenta creada. Ya puedes iniciar sesi\u00f3n.';
     } catch (error) {
-      registerStatus.textContent = error.message === 'local-backend-only'
-        ? 'El registro solo est\u00e1 disponible localmente. Abre esta p\u00e1gina desde localhost para crear una cuenta.'
-        : error instanceof TypeError
-          ? 'No se pudo conectar con el backend local. Comprueba que est\u00e9 ejecut\u00e1ndose en localhost:3000.'
-          : error.message;
+      registerStatus.textContent = error instanceof TypeError
+        ? 'No fue posible conectar en este momento. Intenta nuevamente más tarde.'
+        : error.message;
     } finally { button.disabled = false; }
   });
 
@@ -235,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderCatalog() {
     const query=search.value.trim().toLocaleLowerCase('es');
     const visible=catalog.filter(item => (!category.value || item.category===category.value) && (!query || `${item.name} ${item.provider}`.toLocaleLowerCase('es').includes(query)) && (!freeOnly.checked || item.free===true));
-    cards.innerHTML=visible.length ? visible.map(item => `<article class="catalog-card"><span class="catalog-type">${esc(item.type)} · ${esc(item.status)}</span><h3>${esc(item.name)}</h3><p class="catalog-provider">${esc(item.provider)} · ${esc(item.category)}</p><p>${esc(item.description)}</p><dl><dt>Modalidad</dt><dd>${esc(item.modality)}</dd><dt>Duración</dt><dd>${esc(item.duration)}</dd><dt>Costo</dt><dd>${esc(item.cost)}</dd><dt>Constancia</dt><dd>${esc(item.certification)}</dd></dl><a class="catalog-source" href="${esc(safeExternalUrl(item.url))}" target="_blank" rel="noopener noreferrer">Consultar fuente oficial ↗</a></article>`).join('') : `<p>${category.value && !catalog.some(item=>item.category===category.value) ? 'Próximamente se agregarán opciones para esta categoría.' : 'No hay opciones que coincidan con estos filtros.'}</p>`;
+    cards.innerHTML=visible.length ? visible.map(item => `<article class="catalog-card"><span class="catalog-type">${esc(item.type)} · ${esc(item.status)}</span><h3>${esc(item.name)}</h3><p class="catalog-provider">${esc(item.provider)} · ${esc(item.category)}</p><p>${esc(item.description)}</p><dl><dt>Modalidad</dt><dd>${esc(item.modality)}</dd><dt>Duración</dt><dd>${esc(item.duration)}</dd><dt>Costo</dt><dd>${esc(item.cost)}</dd><dt>Constancia</dt><dd>${esc(item.certification)}</dd></dl><a class="catalog-source" href="${esc(safeExternalUrl(item.url))}" target="_blank" rel="noopener noreferrer">Consultar fuente oficial ↗</a></article>`).join('') : `<p>${category.value && !catalog.some(item=>item.category===category.value) ? 'No hay opciones disponibles para esta categoría por el momento.' : 'No hay opciones que coincidan con estos filtros.'}</p>`;
   }
   [category,search,freeOnly].forEach(control => control.addEventListener('input',renderCatalog)); renderCatalog();
 
@@ -250,10 +246,40 @@ document.addEventListener('DOMContentLoaded', () => {
   const needs={marketing:[['Promocionar mis productos en redes sociales','promocionar mis productos en redes sociales'],['Aumentar mis ventas','aumentar mis ventas']],ventas:[['Aumentar mis ventas','aumentar mis ventas'],['Promocionar mis productos en redes sociales','promocionar mis productos en redes sociales']],administración:[['Organizar las finanzas de mi negocio','organizar las finanzas'],['Organizar mejor mi negocio','organizar mejor mi negocio']], 'herramientas digitales':[['Aprender a utilizar Excel','aprender excel'],['Aprender Word','aprender word']],floricultura:[['Mejorar el cuidado de mis flores','cuidado de mis flores'],['Manejar mejor mi vivero','manejo viveros']],ciberseguridad:[['Proteger mis cuentas y datos','proteger mis cuentas'],['Prevenir riesgos digitales','seguridad digital']], 'atención al cliente':[['Mejorar la atención a mis clientes','atención al cliente']]};
   const answers={}; let step=0;
   function say(text,kind='bot'){const p=document.createElement('p');p.className=`chat-message ${kind}`;p.textContent=text;log.append(p);log.scrollTop=log.scrollHeight;}
-  function showQuestion(){if(step===2){questions[2].choices=needs[answers.area]||[];if(!questions[2].choices.length){say('Aún no tenemos opciones verificadas para esta categoría.');questions[2].choices=[['Consultar opciones próximas','próximamente']];}}
-    const q=questions[step];say(q.label);options.replaceChildren();q.choices.forEach(([label,value])=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.addEventListener('click',()=>{answers[q.key]=value;say(label,'user');step++;if(step<questions.length)showQuestion();else showResults();});options.append(b);});
-    if(step>0){const back=document.createElement('button');back.type='button';back.className='chat-back';back.textContent='← Pregunta anterior';back.addEventListener('click',()=>{step--;showQuestion();});options.append(back);}}
-  function showResults(){options.replaceChildren();say('Estoy comparando tus respuestas con el catálogo…');const results=window.FLORECE_RECOMMENDER.recommend(answers);if(!results.length){say('No encontré coincidencias compatibles con tus preferencias. Puedes probar “Cualquiera” en modalidad o presupuesto.');}else{results.forEach(item=>{const article=document.createElement('article');article.className='chat-result';const title=document.createElement('strong');title.textContent=item.name;const details=document.createElement('p');details.textContent=`${item.provider} · ${item.status} · Coincidencia ${item.score}/100`;const reason=document.createElement('p');reason.textContent=item.reason;const link=document.createElement('a');link.href=safeExternalUrl(item.url);link.target='_blank';link.rel='noopener noreferrer';link.textContent='Consultar fuente ↗';article.append(title,details,reason,link);log.append(article);});}const restart=document.createElement('button');restart.textContent='Empezar de nuevo';restart.addEventListener('click',()=>{answers.business=answers.area=answers.need=answers.modality=answers.budget=undefined;step=0;log.replaceChildren();say('Hola, soy Xóchitl. Te ayudaré a encontrar opciones relacionadas con tu negocio. No necesito datos personales.');showQuestion();});options.append(restart);}
+  function showQuestion(){
+    if(step===2){
+      questions[2].choices=needs[answers.area]||[];
+      if(!questions[2].choices.length){
+        say('No hay opciones disponibles para esta categoría por el momento.');
+        options.replaceChildren();
+        const chooseAgain=document.createElement('button');
+        chooseAgain.type='button';
+        chooseAgain.textContent='Elegir otra categoría';
+        chooseAgain.addEventListener('click',()=>{answers.area=undefined;step=1;showQuestion();});
+        options.append(chooseAgain);
+        return;
+      }
+    }
+    const q=questions[step];
+    say(q.label);
+    options.replaceChildren();
+    q.choices.forEach(([label,value])=>{
+      const b=document.createElement('button');
+      b.type='button';
+      b.textContent=label;
+      b.addEventListener('click',()=>{answers[q.key]=value;say(label,'user');step++;if(step<questions.length)showQuestion();else showResults();});
+      options.append(b);
+    });
+    if(step>0){
+      const back=document.createElement('button');
+      back.type='button';
+      back.className='chat-back';
+      back.textContent='← Pregunta anterior';
+      back.addEventListener('click',()=>{step--;showQuestion();});
+      options.append(back);
+    }
+  }
+  function showResults(){options.replaceChildren();say('Según tus preferencias, estas opciones podrían interesarte.');const results=window.FLORECE_RECOMMENDER.recommend(answers);if(!results.length){say('No encontramos opciones que coincidan con tus preferencias. Puedes ajustar tus respuestas e intentarlo de nuevo.');}else{results.forEach(item=>{const article=document.createElement('article');article.className='chat-result';const title=document.createElement('strong');title.textContent=item.name;const details=document.createElement('p');details.textContent=`${item.provider} · ${item.status}`;const reason=document.createElement('p');reason.textContent=item.reason;const link=document.createElement('a');link.href=safeExternalUrl(item.url);link.target='_blank';link.rel='noopener noreferrer';link.textContent='Consultar fuente ↗';article.append(title,details,reason,link);log.append(article);});}const restart=document.createElement('button');restart.textContent='Empezar de nuevo';restart.addEventListener('click',()=>{answers.business=answers.area=answers.need=answers.modality=answers.budget=undefined;step=0;log.replaceChildren();say('Hola, soy Xóchitl. Te ayudaré a encontrar opciones relacionadas con tu negocio. No necesito datos personales.');showQuestion();});options.append(restart);}
   function openChat(){panel.hidden=false;opener.setAttribute('aria-expanded','true');if(!log.childElementCount){say('Hola, soy Xóchitl. Te ayudaré a encontrar opciones relacionadas con tu negocio. No necesito datos personales.');say('¿Iniciamos una recomendación?');const start=document.createElement('button');start.textContent='Iniciar recomendación';start.addEventListener('click',()=>{start.remove();showQuestion();});options.append(start);}}
   opener.addEventListener('click',openChat);closer.addEventListener('click',()=>{panel.hidden=true;opener.setAttribute('aria-expanded','false');opener.focus();});
   const privacyDialog = document.querySelector('#privacy-dialog');

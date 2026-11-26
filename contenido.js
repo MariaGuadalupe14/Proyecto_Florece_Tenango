@@ -42,15 +42,13 @@
 
   function renderComercios(items) {
     const container = document.querySelector('#comercios .center-grid');
-    if (!container || items === null) return;
-    if (!items.length) {
-      const empty = document.createElement('article');
-      empty.className = 'center-card';
-      const title = document.createElement('h3');
-      title.textContent = 'Directorio en preparación';
-      const description = document.createElement('p');
-      description.textContent = 'Pronto se publicará información verificada de los comercios locales.';
-      empty.append(title, description);
+    if (!container) return;
+    if (items === null || !items.length) {
+      const empty = document.createElement('p');
+      empty.className = 'public-content-empty';
+      empty.textContent = items === null
+        ? 'No fue posible cargar los comercios en este momento.'
+        : 'No hay comercios disponibles por el momento.';
       container.replaceChildren(empty);
       return;
     }

@@ -52,7 +52,7 @@ const registrationLimit = rateLimit({
     limit: 5,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
-    message: { mensaje: 'Registration limit reached. Try again later.' }
+    message: { mensaje: 'No se pudo crear la cuenta por ahora. Intenta nuevamente más tarde.' }
 });
 
 const csrfTokenLimit = rateLimit({
@@ -108,12 +108,12 @@ function requireCsrf(req, res, next) {
     const provided = req.get('X-CSRF-Token');
     const expected = req.session && req.session.csrfToken;
     if (typeof provided !== 'string' || typeof expected !== 'string') {
-        return res.status(403).json({ mensaje: 'Token CSRF no v?lido.' });
+        return res.status(403).json({ mensaje: 'No se pudo completar la solicitud. Actualiza la página e inténtalo de nuevo.' });
     }
     const suppliedBytes = Buffer.from(provided, 'utf8');
     const expectedBytes = Buffer.from(expected, 'utf8');
     if (suppliedBytes.length !== expectedBytes.length || !crypto.timingSafeEqual(suppliedBytes, expectedBytes)) {
-        return res.status(403).json({ mensaje: 'Token CSRF no v?lido.' });
+        return res.status(403).json({ mensaje: 'No se pudo completar la solicitud. Actualiza la página e inténtalo de nuevo.' });
     }
     next();
 }
@@ -482,7 +482,7 @@ router.post('/delete-account', accountDeletionLimit, requireAuth, requireCsrf, a
             sameSite: 'lax'
         });
         return res.json({
-            mensaje: 'La solicitud fue registrada. La cuenta quedó bloqueada y sus sesiones fueron invalidadas; los datos aún no se han eliminado físicamente.'
+            mensaje: 'Tu solicitud de eliminación fue recibida.'
         });
     } catch (error) {
         if (transactionOpen) {
@@ -491,7 +491,7 @@ router.post('/delete-account', accountDeletionLimit, requireAuth, requireCsrf, a
             }
         }
         console.error('Account deletion request failed:', error.code || 'DB_ERROR');
-        return res.status(500).json({ mensaje: 'No se pudo completar la solicitud. La cuenta no se confirmó como bloqueada.' });
+        return res.status(500).json({ mensaje: 'No fue posible procesar tu solicitud. Intenta nuevamente más tarde.' });
     } finally {
         connection?.release();
     }

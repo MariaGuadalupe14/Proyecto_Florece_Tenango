@@ -25,7 +25,7 @@
       fields: [
         ['nombre', 'Nombre', 'text', true, 150], ['categoria', 'Categoría', 'text', false, 100],
         ['descripcion', 'Descripción', 'textarea', false, 2000], ['contacto', 'Contacto', 'text', false, 150],
-        ['ubicacion', 'Ubicación', 'text', false, 255], ['sitio_web', 'Sitio web (HTTPS)', 'url', false, 500],
+        ['ubicacion', 'Ubicación', 'text', false, 255],
         ['imagen_url', 'Ruta pública de imagen (opcional)', 'text', false, 500], ['estado', 'Publicación', 'state', true]
       ],
       columns: [['nombre', 'Nombre'], ['categoria', 'Categoría'], ['contacto', 'Contacto'], ['estado', 'Estado']]

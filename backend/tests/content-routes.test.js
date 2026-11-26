@@ -166,7 +166,8 @@ test('admin can edit a record and publish it using parameterized updates', async
         assert.equal(published.status, 200);
     });
     const edit = db.calls.find(call => call.sql.startsWith('UPDATE negocios SET nombre'));
-    assert.deepEqual(edit.params, ['Comercio actualizado', null, null, null, null, null, null, 'borrador', 45]);
+    assert.deepEqual(edit.params, ['Comercio actualizado', null, null, null, null, null, 'borrador', 45]);
+    assert.doesNotMatch(edit.sql, /sitio_web/);
     const state = db.calls.find(call => call.sql.startsWith('UPDATE negocios SET estado = ?'));
     assert.deepEqual(state.params, ['publicado', 45]);
     assert.equal(db.calls.filter(call => call.sql.includes('INSERT INTO registros_actividad')).length, 2);
